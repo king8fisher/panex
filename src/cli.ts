@@ -18,7 +18,8 @@ program
   .version('0.1.0')
   .argument('<commands...>', 'Commands to run in parallel')
   .option('-n, --names <names>', 'Comma-separated names for each process')
-  .action(async (commands: string[], options: { names?: string; }) => {
+  .option('--no-shift-tab [names]', 'Disable Shift-Tab to exit focus (all or comma-separated process names)')
+  .action(async (commands: string[], options: { names?: string; shiftTab?: boolean | string }) => {
     const rawNames = options.names?.split(',') ?? commands.map((_, i) => `proc${i + 1}`);
 
     // Ensure unique names by adding suffix for duplicates
@@ -30,10 +31,21 @@ program
       return count === 0 ? baseName : `${baseName}-${count + 1}`;
     });
 
+    // Parse noShiftTab option
+    let noShiftTab: boolean | string[] | undefined;
+    if (options.shiftTab === false) {
+      noShiftTab = true; // --no-shift-tab without args disables for all
+    } else if (typeof options.shiftTab === 'string') {
+      noShiftTab = options.shiftTab.split(','); // --no-shift-tab api,mobile
+    }
+
     const config: PanexConfig = {
       procs: Object.fromEntries(
         commands.map((cmd, i) => [names[i], { shell: cmd }])
       ),
+      settings: {
+        noShiftTab,
+      },
     };
 
     await createTUI(config);

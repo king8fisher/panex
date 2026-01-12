@@ -67,7 +67,7 @@ export async function createTUI(config: PanexConfig): Promise<void> {
       bg: 'blue',
       fg: 'white',
     },
-    content: ' [↑↓/jk] select  [Enter] focus  [r] restart  [A] restart All  [x] kill  [q] quit  [?] help ',
+    content: ' [↑↓/jk] select  [Tab/Enter] focus  [r] restart  [A] restart All  [x] kill  [q] quit  [?] help ',
   });
 
   // Help popup
@@ -94,7 +94,7 @@ export async function createTUI(config: PanexConfig): Promise<void> {
     PgUp/PgDn     Scroll output
 
   Process Control
-    Enter         Focus process (interactive mode)
+    Tab/Enter     Focus process (interactive mode)
     Esc           Exit focus mode
     r             Restart selected process
     A             Restart all processes
@@ -113,6 +113,20 @@ export async function createTUI(config: PanexConfig): Promise<void> {
   let focusMode = false;
   const processNames = Object.keys(config.procs);
   const scrollPositions = new Map<string, number>(); // Track scroll % per process
+
+  // Check if Shift-Tab is disabled for a process
+  function isShiftTabDisabled(name: string): boolean {
+    const setting = config.settings?.noShiftTab;
+    if (setting === true) return true;
+    if (Array.isArray(setting)) return setting.includes(name);
+    return false;
+  }
+
+  // Get focus mode status bar text based on current process
+  function getFocusStatusText(name: string): string {
+    const shiftTabHint = isShiftTabDisabled(name) ? '' : 'Shift-Tab/';
+    return ` FOCUS: ${name} - Type to interact, [${shiftTabHint}Esc] to exit focus mode `;
+  }
 
   // Update process list UI
   function updateProcessList() {
@@ -194,7 +208,19 @@ export async function createTUI(config: PanexConfig): Promise<void> {
     }
     if (focusMode) {
       focusMode = false;
-      statusBar.setContent(' [↑↓/jk] select  [Enter] focus  [r] restart  [A] restart All  [x] kill  [q] quit  [?] help ');
+      statusBar.style.bg = 'blue';
+      statusBar.setContent(' [↑↓/jk] select  [Tab/Enter] focus  [r] restart  [A] restart All  [x] kill  [q] quit  [?] help ');
+      screen.render();
+    }
+  });
+
+  screen.key(['S-tab'], () => {
+    if (!helpBox.hidden) return;
+    const name = processNames[selectedIndex];
+    if (focusMode && name && !isShiftTabDisabled(name)) {
+      focusMode = false;
+      statusBar.style.bg = 'blue';
+      statusBar.setContent(' [↑↓/jk] select  [Tab/Enter] focus  [r] restart  [A] restart All  [x] kill  [q] quit  [?] help ');
       screen.render();
     }
   });
@@ -224,7 +250,7 @@ export async function createTUI(config: PanexConfig): Promise<void> {
     }
   });
 
-  screen.key(['enter'], () => {
+  screen.key(['enter', 'tab'], () => {
     if (!helpBox.hidden) {
       helpBox.hide();
       screen.render();
@@ -232,9 +258,11 @@ export async function createTUI(config: PanexConfig): Promise<void> {
     }
     if (!focusMode) {
       // Enter focus mode (don't forward this Enter)
-      focusMode = true;
       const name = processNames[selectedIndex];
-      statusBar.setContent(` FOCUS: ${name} - Type to interact, [Esc] to exit focus mode `);
+      if (!name) return;
+      focusMode = true;
+      statusBar.style.bg = 'green';
+      statusBar.setContent(getFocusStatusText(name));
       screen.render();
     } else {
       // Already in focus mode - forward Enter to process
@@ -282,14 +310,27 @@ export async function createTUI(config: PanexConfig): Promise<void> {
   outputBox.on('click', () => {
     if (!helpBox.hidden) return;
     if (!focusMode) {
-      focusMode = true;
       const name = processNames[selectedIndex];
-      statusBar.setContent(` FOCUS: ${name} - Type to interact, [Esc] to exit focus mode `);
+      if (!name) return;
+      focusMode = true;
+      statusBar.style.bg = 'green';
+      statusBar.setContent(getFocusStatusText(name));
       screen.render();
     }
   });
 
-  // Mouse click on process list (single click)
+  // Mouse click anywhere on process list panel exits focus mode
+  processList.on('click', () => {
+    if (!helpBox.hidden) return;
+    if (focusMode) {
+      focusMode = false;
+      statusBar.style.bg = 'blue';
+      statusBar.setContent(' [↑↓/jk] select  [Tab/Enter] focus  [r] restart  [A] restart All  [x] kill  [q] quit  [?] help ');
+      screen.render();
+    }
+  });
+
+  // Mouse click on process list item (single click) - select process
   processList.on('element click', (_el: blessed.Widgets.BlessedElement, data: { y: number }) => {
     if (!helpBox.hidden) return;
 
@@ -299,11 +340,6 @@ export async function createTUI(config: PanexConfig): Promise<void> {
 
     if (clickedIndex < 0 || clickedIndex >= processNames.length) return;
 
-    // Exit focus mode on click
-    if (focusMode) {
-      focusMode = false;
-      statusBar.setContent(' [↑↓/jk] select  [Enter] focus  [r] restart  [A] restart All  [x] kill  [q] quit  [?] help ');
-    }
     if (clickedIndex !== selectedIndex) {
       saveScrollPosition();
       selectedIndex = clickedIndex;
@@ -315,15 +351,29 @@ export async function createTUI(config: PanexConfig): Promise<void> {
 
   // Forward input in focus mode
   screen.on('keypress', (ch: string, key: { full: string; name?: string }) => {
-    if (focusMode && ch) {
-      // Don't forward Escape (used to exit focus) or Enter (handled separately)
-      if (key.name === 'escape' || key.name === 'return' || key.name === 'enter') {
-        return;
-      }
-      const name = processNames[selectedIndex];
-      if (name) {
-        processManager.write(name, ch);
-      }
+    if (!focusMode) return;
+
+    // Don't forward Escape (used to exit focus), Enter or Tab (handled separately)
+    if (key.name === 'escape' || key.name === 'return' || key.name === 'enter' || key.name === 'tab') {
+      return;
+    }
+
+    const name = processNames[selectedIndex];
+    if (!name) return;
+
+    // Arrow keys need special handling - send ANSI escape sequences
+    const arrowSequences: Record<string, string> = {
+      up: '\x1b[A',
+      down: '\x1b[B',
+      right: '\x1b[C',
+      left: '\x1b[D',
+    };
+
+    const arrowSeq = key.name ? arrowSequences[key.name] : undefined;
+    if (arrowSeq) {
+      processManager.write(name, arrowSeq);
+    } else if (ch) {
+      processManager.write(name, ch);
     }
   });
 
