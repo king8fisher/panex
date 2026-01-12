@@ -18,7 +18,7 @@ export default defineConfig([
     target: 'node18',
     external: ['node-pty'],
     banner: {
-      js: '#!/usr/bin/env node',
+      js: '#!/usr/bin/env bun',
     },
   },
 ]);

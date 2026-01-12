@@ -21,20 +21,18 @@ A terminal UI for running multiple processes in parallel. Like Turborepo's TUI, 
 - **Zero config** - Just pass commands as arguments
 - **Cross-platform** - macOS, Linux, Windows
 
+## Requirements
+
+**Bun runtime is required.** Panex uses Bun's built-in PTY support for interactive processes.
+
 ## Installation
 
 ```bash
-# npm
-npm install -g panex
-
-# or run directly
-npx panex "npm run api" "npm run web"
-
-# bun
+# Run directly with bunx
 bunx panex "bun run api" "bun run web"
 
-# pnpm
-pnpm add -g panex
+# Or install globally
+bun add -g panex
 ```
 
 ## Usage
@@ -51,28 +49,28 @@ panex -n api,web,mobile "npm run api" "npm run web" "npm run mobile"
 
 ### Keyboard Shortcuts
 
-| Key | Action |
-|-----|--------|
-| `↑/↓` or `j/k` | Navigate process list |
-| `Enter` | Focus process (interactive mode) |
-| `Esc` | Exit focus mode |
-| `r` | Restart selected process |
-| `x` | Kill selected process |
-| `a` | Restart all processes |
-| `q` | Quit panex |
-| `?` | Show help |
-| `g/G` | Scroll to top/bottom |
-| `PgUp/PgDn` | Scroll output |
+| Key            | Action                           |
+| -------------- | -------------------------------- |
+| `↑/↓` or `j/k` | Navigate process list            |
+| `Enter`        | Focus process (interactive mode) |
+| `Esc`          | Exit focus mode                  |
+| `r`            | Restart selected process         |
+| `x`            | Kill selected process            |
+| `A`            | Restart all processes            |
+| `q`            | Quit panex                       |
+| `?`            | Show help                        |
+| `g/G`          | Scroll to top/bottom             |
+| `PgUp/PgDn`    | Scroll output                    |
 
 ## Why panex?
 
-| Feature | panex | concurrently | mprocs | turbo |
-|---------|-------|--------------|--------|-------|
-| Split-pane TUI | ✅ | ❌ | ✅ | ✅ |
-| PTY support (QR codes) | ✅ | ❌ | ✅ | ✅ |
-| Zero config | ✅ | ✅ | ❌ | ❌ |
-| npm install | ✅ | ✅ | ❌ | ✅ |
-| No monorepo required | ✅ | ✅ | ✅ | ❌ |
+| Feature                | panex | concurrently | mprocs | turbo |
+| ---------------------- | ----- | ------------ | ------ | ----- |
+| Split-pane TUI         | ✅     | ❌            | ✅      | ✅     |
+| PTY support (QR codes) | ✅     | ❌            | ✅      | ✅     |
+| Zero config            | ✅     | ✅            | ❌      | ❌     |
+| npm install            | ✅     | ✅            | ❌      | ✅     |
+| No monorepo required   | ✅     | ✅            | ✅      | ❌     |
 
 ## Development
 
@@ -104,7 +102,7 @@ node dist/cli.js "echo test"
 
 - TypeScript + Bun
 - blessed (TUI framework)
-- node-pty (PTY support for interactive processes)
+- Bun.spawn with terminal (PTY support)
 - commander (CLI parsing)
 - tsup (build tool)
 

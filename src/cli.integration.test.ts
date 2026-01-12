@@ -12,8 +12,8 @@ describe('CLI Integration', () => {
   it('dist/cli.js has single shebang on line 1', async () => {
     const content = await readFile('dist/cli.js', 'utf-8');
     const lines = content.split('\n');
-    expect(lines[0]).toBe('#!/usr/bin/env node');
-    expect(lines[1]).not.toBe('#!/usr/bin/env node');
+    expect(lines[0]).toBe('#!/usr/bin/env bun');
+    expect(lines[1]).not.toBe('#!/usr/bin/env bun');
   });
 
   it('dist/index.js has no shebang', async () => {
@@ -22,13 +22,13 @@ describe('CLI Integration', () => {
   });
 
   it('CLI --help works', async () => {
-    const result = await $`node dist/cli.js --help`.text();
+    const result = await $`bun dist/cli.js --help`.text();
     expect(result).toContain('panex');
     expect(result).toContain('Commands to run in parallel');
   });
 
   it('CLI --version works', async () => {
-    const result = await $`node dist/cli.js --version`.text();
+    const result = await $`bun dist/cli.js --version`.text();
     expect(result.trim()).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
@@ -61,8 +61,8 @@ describe('CLI Package Integration (simulates bunx)', () => {
     const cliPath = join(tempDir, 'node_modules', 'panex', 'dist', 'cli.js');
     const content = await readFile(cliPath, 'utf-8');
     const lines = content.split('\n');
-    expect(lines[0]).toBe('#!/usr/bin/env node');
-    expect(lines[1]).not.toBe('#!/usr/bin/env node');
+    expect(lines[0]).toBe('#!/usr/bin/env bun');
+    expect(lines[1]).not.toBe('#!/usr/bin/env bun');
   });
 
   it('bunx panex --help works from installed package', async () => {
