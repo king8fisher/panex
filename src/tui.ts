@@ -26,8 +26,6 @@ export async function createTUI(config: PanexConfig): Promise<void> {
       selected: { bg: 'blue', fg: 'white' },
       item: { fg: 'white' },
     },
-    keys: true,
-    vi: true,
     mouse: config.settings?.mouse ?? true,
     scrollbar: {
       ch: '│',
@@ -114,6 +112,7 @@ export async function createTUI(config: PanexConfig): Promise<void> {
   let selectedIndex = 0;
   let focusMode = false;
   const processNames = Object.keys(config.procs);
+  const scrollPositions = new Map<string, number>(); // Track scroll % per process
 
   // Update process list UI
   function updateProcessList() {
@@ -129,21 +128,35 @@ export async function createTUI(config: PanexConfig): Promise<void> {
   }
 
   // Update output panel
-  function updateOutput() {
+  function updateOutput(autoScroll = false) {
     const name = processNames[selectedIndex];
     if (name) {
       outputBox.setLabel(` OUTPUT: ${name} `);
       const output = processManager.getOutput(name);
       outputBox.setContent(output);
-      outputBox.setScrollPerc(100); // Scroll to bottom
+      if (autoScroll) {
+        outputBox.setScrollPerc(100); // Scroll to bottom for new output
+      } else {
+        // Restore saved scroll position or default to bottom
+        const savedPos = scrollPositions.get(name) ?? 100;
+        outputBox.setScrollPerc(savedPos);
+      }
     }
     screen.render();
+  }
+
+  // Save current scroll position before switching
+  function saveScrollPosition() {
+    const name = processNames[selectedIndex];
+    if (name) {
+      scrollPositions.set(name, outputBox.getScrollPerc());
+    }
   }
 
   // Event handlers
   processManager.on('output', (name: string) => {
     if (name === processNames[selectedIndex]) {
-      updateOutput();
+      updateOutput(true); // Auto-scroll for new output
     }
   });
 
@@ -153,6 +166,13 @@ export async function createTUI(config: PanexConfig): Promise<void> {
 
   processManager.on('exit', () => {
     updateProcessList();
+  });
+
+  processManager.on('error', (name: string) => {
+    updateProcessList();
+    if (name === processNames[selectedIndex]) {
+      updateOutput();
+    }
   });
 
   // Keyboard handling
@@ -186,16 +206,22 @@ export async function createTUI(config: PanexConfig): Promise<void> {
 
   screen.key(['up', 'k'], () => {
     if (focusMode || !helpBox.hidden) return;
-    selectedIndex = Math.max(0, selectedIndex - 1);
-    updateProcessList();
-    updateOutput();
+    if (selectedIndex > 0) {
+      saveScrollPosition();
+      selectedIndex--;
+      updateProcessList();
+      updateOutput();
+    }
   });
 
   screen.key(['down', 'j'], () => {
     if (focusMode || !helpBox.hidden) return;
-    selectedIndex = Math.min(processNames.length - 1, selectedIndex + 1);
-    updateProcessList();
-    updateOutput();
+    if (selectedIndex < processNames.length - 1) {
+      saveScrollPosition();
+      selectedIndex++;
+      updateProcessList();
+      updateOutput();
+    }
   });
 
   screen.key(['enter'], () => {
@@ -204,14 +230,19 @@ export async function createTUI(config: PanexConfig): Promise<void> {
       screen.render();
       return;
     }
-    focusMode = !focusMode;
-    const name = processNames[selectedIndex];
-    if (focusMode && name) {
+    if (!focusMode) {
+      // Enter focus mode (don't forward this Enter)
+      focusMode = true;
+      const name = processNames[selectedIndex];
       statusBar.setContent(` FOCUS: ${name} - Type to interact, [Esc] to exit focus mode `);
+      screen.render();
     } else {
-      statusBar.setContent(' [↑↓/jk] select  [Enter] focus  [r] restart  [a] restart all  [x] kill  [q] quit  [?] help ');
+      // Already in focus mode - forward Enter to process
+      const name = processNames[selectedIndex];
+      if (name) {
+        processManager.write(name, '\r');
+      }
     }
-    screen.render();
   });
 
   screen.key(['r'], () => {
@@ -248,8 +279,12 @@ export async function createTUI(config: PanexConfig): Promise<void> {
   });
 
   // Forward input in focus mode
-  screen.on('keypress', (ch: string, key: { full: string }) => {
+  screen.on('keypress', (ch: string, key: { full: string; name?: string }) => {
     if (focusMode && ch) {
+      // Don't forward Escape (used to exit focus) or Enter (handled separately)
+      if (key.name === 'escape' || key.name === 'return' || key.name === 'enter') {
+        return;
+      }
       const name = processNames[selectedIndex];
       if (name) {
         processManager.write(name, ch);

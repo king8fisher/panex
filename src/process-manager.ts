@@ -1,11 +1,16 @@
-import * as pty from 'node-pty';
 import { EventEmitter } from 'events';
 import type { ProcessConfig } from './types';
+
+interface PtyHandle {
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  kill(): void;
+}
 
 export interface ManagedProcess {
   name: string;
   config: ProcessConfig;
-  pty: pty.IPty | null;
+  pty: PtyHandle | null;
   status: 'running' | 'stopped' | 'error';
   output: string[];
   exitCode: number | null;
@@ -41,60 +46,58 @@ export class ProcessManager extends EventEmitter {
     const cwd = config.cwd ?? process.cwd();
     const env = { ...process.env, ...config.env };
 
+    const managed: ManagedProcess = {
+      name,
+      config,
+      pty: null,
+      status: 'running',
+      output: [],
+      exitCode: null,
+    };
+
+    this.processes.set(name, managed);
+
     try {
-      const ptyProcess = pty.spawn(shell, args, {
-        name: 'xterm-256color',
-        cols: 120,
-        rows: 30,
+      const proc = Bun.spawn([shell, ...args], {
         cwd,
         env: env as Record<string, string>,
+        terminal: {
+          cols: 120,
+          rows: 30,
+          data: (_terminal: unknown, data: Uint8Array) => {
+            const str = new TextDecoder().decode(data);
+            managed.output.push(str);
+            if (managed.output.length > this.maxOutputLines) {
+              managed.output = managed.output.slice(-this.maxOutputLines);
+            }
+            this.emit('output', name, str);
+          },
+        },
       });
 
-      const managed: ManagedProcess = {
-        name,
-        config,
-        pty: ptyProcess,
-        status: 'running',
-        output: [],
-        exitCode: null,
+      managed.pty = {
+        write: (data: string) => proc.terminal?.write(data),
+        resize: (cols: number, rows: number) => proc.terminal?.resize(cols, rows),
+        kill: () => proc.kill(),
       };
 
-      this.processes.set(name, managed);
-
-      ptyProcess.onData((data) => {
-        managed.output.push(data);
-        // Trim output if too long
-        if (managed.output.length > this.maxOutputLines) {
-          managed.output = managed.output.slice(-this.maxOutputLines);
-        }
-        this.emit('output', name, data);
-      });
-
-      ptyProcess.onExit(({ exitCode }) => {
+      // Handle exit
+      proc.exited.then((exitCode) => {
         managed.status = exitCode === 0 ? 'stopped' : 'error';
         managed.exitCode = exitCode;
         managed.pty = null;
         this.emit('exit', name, exitCode);
 
-        // Auto-restart if configured
-        if (config.autoRestart && exitCode !== 0) {
-          setTimeout(() => {
-            this.start(name, config);
-          }, 1000);
+        if (managed.config.autoRestart && exitCode !== 0) {
+          setTimeout(() => this.start(name, managed.config), 1000);
         }
       });
 
       this.emit('started', name);
     } catch (error) {
-      const managed: ManagedProcess = {
-        name,
-        config,
-        pty: null,
-        status: 'error',
-        output: [`Error starting process: ${error}`],
-        exitCode: -1,
-      };
-      this.processes.set(name, managed);
+      managed.status = 'error';
+      managed.output = [`Error starting process: ${error}`];
+      managed.exitCode = -1;
       this.emit('error', name, error);
     }
   }
