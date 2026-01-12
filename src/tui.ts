@@ -67,7 +67,7 @@ export async function createTUI(config: PanexConfig): Promise<void> {
       bg: 'blue',
       fg: 'white',
     },
-    content: ' [↑↓/jk] select  [Enter] focus  [r] restart  [a] restart all  [x] kill  [q] quit  [?] help ',
+    content: ' [↑↓/jk] select  [Enter] focus  [r] restart  [A] restart All  [x] kill  [q] quit  [?] help ',
   });
 
   // Help popup
@@ -97,7 +97,7 @@ export async function createTUI(config: PanexConfig): Promise<void> {
     Enter         Focus process (interactive mode)
     Esc           Exit focus mode
     r             Restart selected process
-    a             Restart all processes
+    A             Restart all processes
     x             Kill selected process
 
   General
@@ -194,7 +194,7 @@ export async function createTUI(config: PanexConfig): Promise<void> {
     }
     if (focusMode) {
       focusMode = false;
-      statusBar.setContent(' [↑↓/jk] select  [Enter] focus  [r] restart  [a] restart all  [x] kill  [q] quit  [?] help ');
+      statusBar.setContent(' [↑↓/jk] select  [Enter] focus  [r] restart  [A] restart All  [x] kill  [q] quit  [?] help ');
       screen.render();
     }
   });
@@ -253,7 +253,7 @@ export async function createTUI(config: PanexConfig): Promise<void> {
     }
   });
 
-  screen.key(['a'], () => {
+  screen.key(['S-a'], () => {
     if (focusMode || !helpBox.hidden) return;
     processManager.restartAll();
   });
@@ -275,6 +275,41 @@ export async function createTUI(config: PanexConfig): Promise<void> {
   screen.key(['S-g'], () => {
     if (focusMode || !helpBox.hidden) return;
     outputBox.setScrollPerc(100);
+    screen.render();
+  });
+
+  // Mouse click on output box enables focus mode
+  outputBox.on('click', () => {
+    if (!helpBox.hidden) return;
+    if (!focusMode) {
+      focusMode = true;
+      const name = processNames[selectedIndex];
+      statusBar.setContent(` FOCUS: ${name} - Type to interact, [Esc] to exit focus mode `);
+      screen.render();
+    }
+  });
+
+  // Mouse click on process list (single click)
+  processList.on('element click', (_el: blessed.Widgets.BlessedElement, data: { y: number }) => {
+    if (!helpBox.hidden) return;
+
+    // Calculate index: y is absolute, subtract list's absolute top and border
+    const absTop = (processList.atop as number) ?? 0;
+    const clickedIndex = data.y - absTop - 1; // -1 for border
+
+    if (clickedIndex < 0 || clickedIndex >= processNames.length) return;
+
+    // Exit focus mode on click
+    if (focusMode) {
+      focusMode = false;
+      statusBar.setContent(' [↑↓/jk] select  [Enter] focus  [r] restart  [A] restart All  [x] kill  [q] quit  [?] help ');
+    }
+    if (clickedIndex !== selectedIndex) {
+      saveScrollPosition();
+      selectedIndex = clickedIndex;
+      updateProcessList();
+      updateOutput();
+    }
     screen.render();
   });
 
