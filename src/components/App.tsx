@@ -28,6 +28,10 @@ export function App({ config }: AppProps) {
   // Track auto-scroll state per process
   const [autoScroll, setAutoScroll] = useState<Record<string, boolean>>({});
 
+  // Track scroll position per process (use ref to avoid closure issues)
+  const scrollPositionsRef = useRef<Record<string, number>>({});
+  const pendingRestoreRef = useRef<string | null>(null);
+
   const {
     names,
     getOutput,
@@ -80,6 +84,52 @@ export function App({ config }: AppProps) {
   const output = selectedName ? getOutput(selectedName) : '';
   const currentAutoScroll = selectedName ? (autoScroll[selectedName] ?? true) : true;
 
+  // Helper to save current scroll position before switching
+  const saveCurrentScrollPosition = useCallback(() => {
+    if (selectedName && outputRef.current) {
+      scrollPositionsRef.current[selectedName] = outputRef.current.getScrollOffset();
+    }
+  }, [selectedName]);
+
+  // Custom setSelected that saves scroll position first
+  const handleSetSelected = useCallback((newSelected: number | ((s: number) => number)) => {
+    saveCurrentScrollPosition();
+    setSelected(prev => {
+      const next = typeof newSelected === 'function' ? newSelected(prev) : newSelected;
+      if (next !== prev) {
+        // Mark that we need to restore scroll for the new process
+        pendingRestoreRef.current = names[next] ?? null;
+      }
+      return next;
+    });
+  }, [saveCurrentScrollPosition, names]);
+
+  // Restore scroll position after render when process changes
+  useEffect(() => {
+    const restoreName = pendingRestoreRef.current;
+    if (restoreName && restoreName === selectedName) {
+      pendingRestoreRef.current = null;
+      const savedOffset = scrollPositionsRef.current[restoreName];
+      // Only restore if we have a saved position AND auto-scroll is disabled
+      if (savedOffset !== undefined && savedOffset > 0 && !autoScroll[restoreName]) {
+        // Use setImmediate to ensure render is complete
+        setImmediate(() => {
+          if (outputRef.current) {
+            // Only restore if content actually needs scrolling
+            const contentHeight = outputRef.current.getContentHeight();
+            const viewportHeight = outputRef.current.getViewportHeight();
+            if (contentHeight > viewportHeight) {
+              const currentOffset = outputRef.current.getScrollOffset();
+              if (currentOffset !== savedOffset) {
+                outputRef.current.scrollBy(savedOffset - currentOffset);
+              }
+            }
+          }
+        });
+      }
+    }
+  }, [selectedName, autoScroll]);
+
   // Handle auto-scroll state changes from OutputPanel
   const handleAutoScrollChange = useCallback((enabled: boolean) => {
     if (selectedName) {
@@ -109,7 +159,7 @@ export function App({ config }: AppProps) {
       }
       const clickedIndex = event.y - 2; // Adjust for border
       if (clickedIndex >= 0 && clickedIndex < names.length) {
-        setSelected(clickedIndex);
+        handleSetSelected(clickedIndex);
       }
     } else {
       // Click on output panel - enter focus mode
@@ -117,7 +167,7 @@ export function App({ config }: AppProps) {
         enterFocus();
       }
     }
-  }, [names.length, focusMode, enterFocus, exitFocus]);
+  }, [names.length, focusMode, enterFocus, exitFocus, handleSetSelected]);
 
   // Enable mouse tracking
   useMouseWheel({
@@ -216,11 +266,11 @@ export function App({ config }: AppProps) {
 
     // Navigation
     if (key.upArrow || input === 'k') {
-      setSelected(s => Math.max(s - 1, 0));
+      handleSetSelected(s => Math.max(s - 1, 0));
       return;
     }
     if (key.downArrow || input === 'j') {
-      setSelected(s => Math.min(s + 1, names.length - 1));
+      handleSetSelected(s => Math.min(s + 1, names.length - 1));
       return;
     }
 

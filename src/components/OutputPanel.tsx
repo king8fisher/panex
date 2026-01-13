@@ -34,6 +34,15 @@ export const OutputPanel = forwardRef<OutputPanelRef, OutputPanelProps>(
     const [contentHeight, setContentHeight] = useState(0);
     const [viewportHeight, setViewportHeight] = useState(0);
 
+    // Reset state synchronously when process changes (before render)
+    const [prevName, setPrevName] = useState(name);
+    if (name !== prevName) {
+      setPrevName(name);
+      setScrollOffset(0);
+      setContentHeight(0);
+      setViewportHeight(0);
+    }
+
     // Handle terminal resize
     useEffect(() => {
       const handleResize = () => scrollRef.current?.remeasure();
@@ -110,6 +119,7 @@ export const OutputPanel = forwardRef<OutputPanelRef, OutputPanelProps>(
         <Box flexDirection="row" marginTop={0} height={height ? height - 2 : undefined}>
           <Box flexDirection="column" flexGrow={1}>
             <ScrollView
+              key={name}
               ref={scrollRef}
               onScroll={handleScroll}
               onContentHeightChange={handleContentHeightChange}

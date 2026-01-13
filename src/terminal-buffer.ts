@@ -1,4 +1,5 @@
 import { Terminal } from '@xterm/headless';
+import { SerializeAddon } from '@xterm/addon-serialize';
 
 /**
  * A terminal buffer that properly interprets ANSI escape sequences including:
@@ -7,9 +8,11 @@ import { Terminal } from '@xterm/headless';
  * - Line clearing (\x1b[K erase to end, \x1b[2K erase line)
  * - Screen clearing (\x1b[2J clear screen)
  * - Carriage return (\r) for in-place updates like progress bars
+ * - ANSI colors and formatting (preserved in output via SerializeAddon)
  */
 export class TerminalBuffer {
   private terminal: Terminal;
+  private serializeAddon: SerializeAddon;
   private rows: number;
   private cols: number;
 
@@ -22,6 +25,8 @@ export class TerminalBuffer {
       scrollback: 10000,
       allowProposedApi: true,
     });
+    this.serializeAddon = new SerializeAddon();
+    this.terminal.loadAddon(this.serializeAddon);
   }
 
   /**
@@ -60,9 +65,11 @@ export class TerminalBuffer {
 
   /**
    * Get the terminal content as a single string with newlines.
+   * Preserves ANSI color codes and formatting.
    */
   toString(): string {
-    return this.getLines().join('\n');
+    // Use serialize addon to get output with ANSI codes preserved
+    return this.serializeAddon.serialize();
   }
 
   /**
