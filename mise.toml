@@ -1,3 +1,9 @@
 [tools]
 bun = "latest"
 node = "24"
+
+[tasks.dev]
+run = [
+  "bun run build",
+  "bun ./dist/cli.js -n \"api,api,api\" \"while true; do echo 'ping'; sleep 1; done\" \"while true; do date; sleep 2; done\" \"for i in {1..20}; do echo line $i; sleep 0.5; done\""
+]
