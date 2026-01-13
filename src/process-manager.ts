@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import type { ProcessConfig } from './types';
+import { TerminalBuffer } from './terminal-buffer';
 
 interface PtyHandle {
   write(data: string): void;
@@ -12,13 +13,12 @@ export interface ManagedProcess {
   config: ProcessConfig;
   pty: PtyHandle | null;
   status: 'running' | 'stopped' | 'error';
-  output: string[];
+  terminalBuffer: TerminalBuffer;
   exitCode: number | null;
 }
 
 export class ProcessManager extends EventEmitter {
   private processes: Map<string, ManagedProcess> = new Map();
-  private maxOutputLines = 10000;
 
   constructor(private procs: Record<string, ProcessConfig>) {
     super();
@@ -51,7 +51,7 @@ export class ProcessManager extends EventEmitter {
       config,
       pty: null,
       status: 'running',
-      output: [],
+      terminalBuffer: new TerminalBuffer(120, 30),
       exitCode: null,
     };
 
@@ -66,10 +66,7 @@ export class ProcessManager extends EventEmitter {
           rows: 30,
           data: (_terminal: unknown, data: Uint8Array) => {
             const str = new TextDecoder().decode(data);
-            managed.output.push(str);
-            if (managed.output.length > this.maxOutputLines) {
-              managed.output = managed.output.slice(-this.maxOutputLines);
-            }
+            managed.terminalBuffer.write(str);
             this.emit('output', name, str);
           },
         },
@@ -96,7 +93,7 @@ export class ProcessManager extends EventEmitter {
       this.emit('started', name);
     } catch (error) {
       managed.status = 'error';
-      managed.output = [`Error starting process: ${error}`];
+      managed.terminalBuffer.write(`Error starting process: ${error}`);
       managed.exitCode = -1;
       this.emit('error', name, error);
     }
@@ -108,7 +105,7 @@ export class ProcessManager extends EventEmitter {
       if (proc.pty) {
         proc.pty.kill();
       }
-      proc.output = [];
+      proc.terminalBuffer.clear();
       this.start(name, proc.config);
     }
   }
@@ -161,6 +158,6 @@ export class ProcessManager extends EventEmitter {
   }
 
   getOutput(name: string): string {
-    return this.processes.get(name)?.output.join('') ?? '';
+    return this.processes.get(name)?.terminalBuffer.toString() ?? '';
   }
 }
