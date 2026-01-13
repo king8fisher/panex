@@ -12,7 +12,7 @@ export function StatusBar({ focusMode, processName, showShiftTabHint = true }: S
     return (
       <Box backgroundColor="green" width="100%">
         <Text bold color="black" backgroundColor="green">
-          {' '}FOCUS: {processName} - Type to interact, [{shiftTabHint}Esc] to exit focus mode{' '}
+          {' '}{processName} | [{shiftTabHint}Esc] to exit focus mode{' '}
         </Text>
       </Box>
     );

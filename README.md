@@ -108,4 +108,4 @@ node dist/cli.js "echo test"
 
 ## License
 
-MIT
+MIT Anton Veretennikov (king8fisher)

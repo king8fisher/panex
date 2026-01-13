@@ -185,9 +185,13 @@ export function App({ config }: AppProps) {
         return;
       }
 
-      // Forward regular input
+      // Forward regular input (filter out mouse escape sequences)
       if (input && !key.ctrl && !key.meta) {
-        write(name, input);
+        // Remove SGR mouse sequences like \x1b[<64;45;5M or [<0;12;7M
+        const filtered = input.replace(/\x1b?\[<\d+;\d+;\d+[Mm]/g, '');
+        if (filtered) {
+          write(name, filtered);
+        }
       }
       return;
     }
