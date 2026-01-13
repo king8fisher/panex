@@ -4,13 +4,13 @@ A terminal UI for running multiple processes in parallel. Like Turborepo's TUI, 
 
 ```
 ┌──────────────┬──────────────────────────────────────────────┐
-│ PROCESSES    │ OUTPUT: api                                  │
+│              │ api                                          │
+│ ▶ api    ●   │                                              │
+│   web    ●   │ Server listening on http://localhost:3001    │
+│   mobile ●   │ {"level":30,"msg":"request completed"}       │
 │              │                                              │
-│ ▶ api    ●   │ Server listening on http://localhost:3001    │
-│   web    ●   │ {"level":30,"msg":"request completed"}       │
-│   mobile ●   │                                              │
 ├──────────────┴──────────────────────────────────────────────┤
-│ [↑↓] select  [enter] focus  [r] restart  [q] quit          │
+│ [↑↓] select  [enter] focus  [r] restart  [q] quit           │
 └─────────────────────────────────────────────────────────────┘
 ```
 

@@ -14,3 +14,5 @@ export interface PanexConfig {
     noShiftTab?: boolean | string[];
   };
 }
+
+export type ProcessStatus = 'running' | 'stopped' | 'error';
