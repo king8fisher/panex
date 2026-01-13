@@ -7,23 +7,31 @@ interface MouseWheelEvent {
   y: number;
 }
 
+interface MouseClickEvent {
+  type: 'click';
+  x: number;
+  y: number;
+}
+
 interface UseMouseWheelOptions {
   enabled?: boolean;
   onWheel?: (event: MouseWheelEvent) => void;
+  onClick?: (event: MouseClickEvent) => void;
 }
 
 /**
- * Hook to enable mouse wheel tracking in the terminal.
+ * Hook to enable mouse tracking in the terminal.
  *
  * Uses ANSI escape sequences for SGR extended mouse mode:
  * - \x1b[?1000h - Enable mouse button tracking
  * - \x1b[?1006h - Enable SGR extended mouse mode
  *
- * Mouse wheel events (SGR mode):
+ * Mouse events (SGR mode):
+ * - Left click: \x1b[<0;X;YM (button 0 = left click press)
  * - Scroll up: \x1b[<64;X;YM (button 64 = wheel up)
  * - Scroll down: \x1b[<65;X;YM (button 65 = wheel down)
  */
-export function useMouseWheel({ enabled = true, onWheel }: UseMouseWheelOptions = {}) {
+export function useMouseWheel({ enabled = true, onWheel, onClick }: UseMouseWheelOptions = {}) {
   const { stdin, setRawMode } = useStdin();
   const { stdout } = useStdout();
 
@@ -43,14 +51,16 @@ export function useMouseWheel({ enabled = true, onWheel }: UseMouseWheelOptions 
       const isPress = match[4] === 'M';
 
       if (isPress) {
-        if (button === 64) {
+        if (button === 0) {
+          onClick?.({ type: 'click', x, y });
+        } else if (button === 64) {
           onWheel?.({ type: 'wheel-up', x, y });
         } else if (button === 65) {
           onWheel?.({ type: 'wheel-down', x, y });
         }
       }
     }
-  }, [onWheel]);
+  }, [onWheel, onClick]);
 
   useEffect(() => {
     if (!enabled || !stdin || !stdout) return;

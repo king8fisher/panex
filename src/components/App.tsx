@@ -4,7 +4,7 @@ import type { PanexConfig } from '../types';
 import { useProcessManager } from '../hooks/useProcessManager';
 import { useFocusMode } from '../hooks/useFocusMode';
 import { useMouseWheel } from '../hooks/useMouseWheel';
-import { ProcessList, ProcessListRef } from './ProcessList';
+import { ProcessList, ProcessListRef, PROCESS_LIST_WIDTH } from './ProcessList';
 import { OutputPanel, OutputPanelRef } from './OutputPanel';
 import { StatusBar } from './StatusBar';
 import { HelpPopup } from './HelpPopup';
@@ -100,10 +100,30 @@ export function App({ config }: AppProps) {
     }
   }, [selectedName]);
 
-  // Enable mouse wheel tracking
+  // Handle mouse click events
+  const handleClick = useCallback((event: { type: 'click'; x: number; y: number; }) => {
+    if (event.x <= PROCESS_LIST_WIDTH) {
+      // Click on process list - exit focus mode, select process if clicked
+      if (focusMode) {
+        exitFocus();
+      }
+      const clickedIndex = event.y - 2; // Adjust for border
+      if (clickedIndex >= 0 && clickedIndex < names.length) {
+        setSelected(clickedIndex);
+      }
+    } else {
+      // Click on output panel - enter focus mode
+      if (!focusMode) {
+        enterFocus();
+      }
+    }
+  }, [names.length, focusMode, enterFocus, exitFocus]);
+
+  // Enable mouse tracking
   useMouseWheel({
     enabled: !showHelp, // Disable when help is shown
     onWheel: handleWheel,
+    onClick: handleClick,
   });
 
   useInput((input, key) => {
@@ -113,8 +133,8 @@ export function App({ config }: AppProps) {
       return;
     }
 
-    // Quit
-    if (input === 'q' || (key.ctrl && input === 'c')) {
+    // Quit (Ctrl+C always works, 'q' only in normal mode)
+    if (key.ctrl && input === 'c') {
       killAll();
       // Restore terminal: disable raw mode, move cursor to bottom, clear below, disable mouse, show cursor
       setRawMode(false);
@@ -124,13 +144,7 @@ export function App({ config }: AppProps) {
       process.exit(0);
     }
 
-    // Help
-    if (input === '?') {
-      setShowHelp(true);
-      return;
-    }
-
-    // Focus mode input handling
+    // Focus mode input handling (before normal mode keys like 'q')
     if (focusMode) {
       const name = names[selected];
       if (!name) return;
@@ -179,6 +193,22 @@ export function App({ config }: AppProps) {
     }
 
     // Normal mode
+
+    // Quit with 'q' (only in normal mode)
+    if (input === 'q') {
+      killAll();
+      setRawMode(false);
+      const rows = stdout?.rows ?? 999;
+      stdout?.write(`\x1b[${rows};1H\x1b[J\x1b[?1000l\x1b[?1006l\x1b[?25h\x1b[0m\n`);
+      exit();
+      process.exit(0);
+    }
+
+    // Help
+    if (input === '?') {
+      setShowHelp(true);
+      return;
+    }
 
     // Navigation
     if (key.upArrow || input === 'k') {

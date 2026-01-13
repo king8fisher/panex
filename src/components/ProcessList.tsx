@@ -3,6 +3,8 @@ import { ScrollList, ScrollListRef } from 'ink-scroll-list';
 import { forwardRef, useImperativeHandle, useRef, useEffect } from 'react';
 import type { ProcessStatus } from '../types';
 
+export const PROCESS_LIST_WIDTH = 20;
+
 interface ProcessListProps {
   names: string[];
   selected: number;
@@ -44,7 +46,7 @@ export const ProcessList = forwardRef<ProcessListRef, ProcessListProps>(
         flexDirection="column"
         borderStyle={borderStyle}
         borderColor={active ? 'blue' : 'gray'}
-        width={20}
+        width={PROCESS_LIST_WIDTH}
         height={height}
         paddingX={1}
       >
@@ -65,7 +67,7 @@ export const ProcessList = forwardRef<ProcessListRef, ProcessListProps>(
                   <Text color={isSelected ? 'black' : undefined}>
                     {name}{' '}
                   </Text>
-                  <Text color={isSelected ? 'black' : statusColor}>{statusIcon}</Text>
+                  <Text color={statusColor}>{statusIcon}</Text>
                 </Box>
               );
             })}
