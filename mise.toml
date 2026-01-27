@@ -1,9 +1,20 @@
 [tools]
-bun = "latest"
-node = "24"
+node = "22"
+rust = "latest"
+
+[tasks.build]
+dir = "panex-rs"
+run = "cargo build --release"
 
 [tasks.dev]
-run = [
-  "bun run build",
-  "bun ./dist/cli.js -n \"ping,date,lines,colors,bold\" \"while true; do echo 'ping'; sleep 1; done\" \"while true; do date; sleep 1; done\" \"for i in {1..20}; do echo line $i; sleep 0.5; done\" \"while true; do echo -e '\\033[31mRed\\033[0m \\033[32mGreen\\033[0m \\033[34mBlue\\033[0m \\033[33mYellow\\033[0m'; sleep 1; done\" \"while true; do echo -e '\\033[1mBold\\033[0m \\033[4mUnderline\\033[0m \\033[1;32mBold Green\\033[0m'; sleep 1; done\"",
-]
+depends = ["build"]
+dir = "panex-rs"
+run = """
+cargo run -- \
+  "while true; do echo 'ping'; sleep 1; done" \
+  "while true; do date; sleep 1; done" \
+  "for i in {1..20}; do echo line $i; sleep 0.5; done" \
+  "while true; do echo -e '\\033[31mRed\\033[0m \\033[32mGreen\\033[0m \\033[34mBlue\\033[0m \\033[33mYellow\\033[0m'; sleep 1; done" \
+  "while true; do echo -e '\\033[1mBold\\033[0m \\033[4mUnderline\\033[0m \\033[1;32mBold Green\\033[0m'; sleep 1; done" \
+  -n ping,date,lines,colors,bold
+"""

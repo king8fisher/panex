@@ -1,23 +1,16 @@
 {
   "name": "panex",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "Terminal UI for running multiple processes in parallel",
-  "type": "module",
   "bin": {
-    "panex": "./dist/cli.js"
+    "panex": "./bin.js"
   },
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "bin.js",
+    "install.js"
   ],
   "scripts": {
-    "dev": "bun run src/cli.ts",
-    "build": "tsup",
-    "test": "bun test",
-    "prepublishOnly": "bun run build",
-    "typecheck": "tsc --noEmit"
+    "postinstall": "node install.js"
   },
   "repository": {
     "type": "git",
@@ -29,30 +22,17 @@
     "process",
     "parallel",
     "devtools",
-    "turbo",
     "cli",
     "concurrently"
   ],
   "author": "Anton Veretennikov (king8fisher)",
   "license": "MIT",
-  "engines": {
-    "bun": ">=1.3.5"
-  },
-  "dependencies": {
-    "@xterm/addon-serialize": "^0.14.0",
-    "@xterm/headless": "^6.0.0",
-    "chalk": "^5.3.0",
-    "commander": "^12.1.0",
-    "ink": "^6.6.0",
-    "ink-scroll-list": "^0.4.1",
-    "ink-scroll-view": "^0.3.5",
-    "react": "^19.2.3"
-  },
-  "devDependencies": {
-    "@types/bun": "^1.3.5",
-    "@types/node": "^22.10.0",
-    "@types/react": "^19.2.8",
-    "tsup": "^8.3.5",
-    "typescript": "^5.7.2"
+  "optionalDependencies": {
+    "@king8fisher/panex-darwin-arm64": "0.9.6",
+    "@king8fisher/panex-darwin-x64": "0.9.6",
+    "@king8fisher/panex-linux-arm64": "0.9.6",
+    "@king8fisher/panex-linux-x64": "0.9.6",
+    "@king8fisher/panex-win32-arm64": "0.9.6",
+    "@king8fisher/panex-win32-x64": "0.9.6"
   }
 }

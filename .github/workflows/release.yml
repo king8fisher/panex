@@ -1,0 +1,131 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            npm_package: panex-darwin-arm64
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            npm_package: panex-darwin-x64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            npm_package: panex-linux-arm64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            npm_package: panex-linux-x64
+          - os: windows-latest
+            target: aarch64-pc-windows-msvc
+            npm_package: panex-win32-arm64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            npm_package: panex-win32-x64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+        working-directory: panex-rs
+
+      - name: Prepare binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p dist
+          cp panex-rs/target/${{ matrix.target }}/release/panex dist/
+          chmod +x dist/panex
+
+      - name: Prepare binary (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir dist
+          copy panex-rs\target\${{ matrix.target }}\release\panex.exe dist\
+
+      - name: Create npm package
+        run: |
+          mkdir -p npm-pkg
+          cp dist/panex* npm-pkg/
+          cat > npm-pkg/package.json << EOF
+          {
+            "name": "@king8fisher/${{ matrix.npm_package }}",
+            "version": "${{ github.ref_name }}",
+            "description": "Panex binary for ${{ matrix.target }}",
+            "os": ["${{ runner.os == 'Windows' && 'win32' || (runner.os == 'macOS' && 'darwin' || 'linux') }}"],
+            "cpu": ["${{ contains(matrix.target, 'aarch64') && 'arm64' || 'x64' }}"],
+            "repository": {
+              "type": "git",
+              "url": "https://github.com/king8fisher/panex"
+            },
+            "license": "MIT"
+          }
+          EOF
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.npm_package }}
+          path: npm-pkg/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish platform packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for pkg in artifacts/*/; do
+            cd "$pkg"
+            npm publish --access public || true
+            cd -
+          done
+
+      - name: Update main package version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          jq --arg v "$VERSION" '.version = $v | .optionalDependencies |= with_entries(.value = $v)' package.json > package.json.tmp
+          mv package.json.tmp package.json
+
+      - name: Publish main package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
