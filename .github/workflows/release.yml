@@ -69,6 +69,7 @@ jobs:
           copy panex-rs\target\${{ matrix.target }}\release\panex.exe dist\
 
       - name: Create npm package
+        shell: bash
         run: |
           mkdir -p npm-pkg
           cp dist/panex* npm-pkg/
