@@ -2,6 +2,9 @@
 node = "22"
 rust = "latest"
 
+[tasks.current-version]
+run = ["npm view panex version"]
+
 [tasks.release]
 description = "Create and push a release tag. Usage: mise run release 1.0.0"
 run = """

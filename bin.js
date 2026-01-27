@@ -62,6 +62,15 @@ function findBinary() {
 
 const binaryPath = findBinary();
 
+// Ensure binary is executable on Unix
+if (binaryPath && process.platform !== "win32") {
+  try {
+    fs.chmodSync(binaryPath, 0o755);
+  } catch (e) {
+    // Ignore chmod errors
+  }
+}
+
 if (!binaryPath) {
   console.error("Could not find panex binary.");
   console.error("For development: cargo build --release in panex-rs/");
