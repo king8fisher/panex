@@ -2,6 +2,23 @@
 node = "22"
 rust = "latest"
 
+[tasks.release]
+description = "Create and push a release tag. Usage: mise run release 1.0.0"
+run = """
+#!/usr/bin/env bash
+set -e
+VERSION="$1"
+if [ -z "$VERSION" ]; then
+  echo "Usage: mise run release <version>"
+  echo "Example: mise run release 1.0.0"
+  exit 1
+fi
+echo "Creating release v$VERSION..."
+git tag -a "v$VERSION" -m "Release v$VERSION"
+git push origin "v$VERSION"
+echo "Done! Watch the release at: https://github.com/king8fisher/panex/actions"
+"""
+
 [tasks.build]
 dir = "panex-rs"
 run = "cargo build --release"

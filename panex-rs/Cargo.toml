@@ -1,6 +1,6 @@
 [package]
 name = "panex"
-version = "0.1.0"
+version = "0.0.0"  # Set by CI from git tag
 edition = "2021"
 description = "Process manager with TUI"
 license = "MIT"

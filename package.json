@@ -1,6 +1,6 @@
 {
   "name": "panex",
-  "version": "0.9.7",
+  "version": "0.0.0",
   "description": "Terminal UI for running multiple processes in parallel",
   "bin": {
     "panex": "./bin.js"

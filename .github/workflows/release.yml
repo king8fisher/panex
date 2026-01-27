@@ -49,6 +49,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
 
+      - name: Set version from tag
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          sed -i.bak "s/^version = .*/version = \"$VERSION\"/" panex-rs/Cargo.toml
+
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
         working-directory: panex-rs
@@ -76,7 +83,7 @@ jobs:
           cat > npm-pkg/package.json << EOF
           {
             "name": "@king8fisher/${{ matrix.npm_package }}",
-            "version": "${{ github.ref_name }}",
+            "version": "$VERSION",
             "description": "Panex binary for ${{ matrix.target }}",
             "os": ["${{ runner.os == 'Windows' && 'win32' || (runner.os == 'macOS' && 'darwin' || 'linux') }}"],
             "cpu": ["${{ contains(matrix.target, 'aarch64') && 'arm64' || 'x64' }}"],
