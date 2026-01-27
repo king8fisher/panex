@@ -20,19 +20,17 @@ A terminal UI for running multiple processes in parallel. Like Turborepo's TUI, 
 - **Full PTY support** - QR codes, colors, interactive prompts work
 - **Zero config** - Just pass commands as arguments
 - **Cross-platform** - macOS, Linux, Windows
-
-## Requirements
-
-**Bun runtime is required.** Panex uses Bun's built-in PTY support for interactive processes.
+- **Native binary** - Fast startup, no runtime dependencies
 
 ## Installation
 
 ```bash
-# Run directly with bunx
+# Run directly with npx or bunx
+npx panex "npm run api" "npm run web"
 bunx panex "bun run api" "bun run web"
 
 # Or install globally
-bun add -g panex
+npm install -g panex
 ```
 
 ## Usage
@@ -79,32 +77,30 @@ panex -n api,web,mobile "npm run api" "npm run web" "npm run mobile"
 git clone https://github.com/king8fisher/panex
 cd panex
 
-# Install dependencies
-bun install
+# Build (requires Rust)
+cargo build --release -p panex
 
-# Run in dev mode
-bun run dev "echo hello" "sleep 2 && echo world"
+# Run locally
+./panex-rs/target/release/panex "echo hello" "sleep 2 && echo world"
 
-# Type check
-bun run typecheck
+# Or with mise
+mise run build
+mise run dev
+```
 
-# Build for npm
-bun run build
+### Releasing
 
-# Run tests
-bun test
-
-# Test built CLI
-node dist/cli.js "echo test"
+```bash
+# Create and push a release tag (triggers CI build + npm publish)
+mise run release 1.0.0
 ```
 
 ## Tech Stack
 
-- TypeScript + Bun
-- blessed (TUI framework)
-- Bun.spawn with terminal (PTY support)
-- commander (CLI parsing)
-- tsup (build tool)
+- Rust
+- ratatui (TUI framework)
+- portable-pty (PTY support)
+- clap (CLI parsing)
 
 ## License
 

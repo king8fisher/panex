@@ -23,6 +23,8 @@ impl PtyHandle {
             })
             .map_err(|e| anyhow!("Failed to open PTY: {}", e))?;
 
+        let cwd = std::env::current_dir().map_err(|e| anyhow!("Failed to get cwd: {}", e))?;
+
         let mut cmd = if cfg!(windows) {
             let mut cmd = CommandBuilder::new("cmd");
             cmd.args(["/C", command]);
@@ -33,6 +35,8 @@ impl PtyHandle {
             cmd.args(["-c", command]);
             cmd
         };
+
+        cmd.cwd(cwd);
 
         // Inherit environment
         for (key, value) in std::env::vars() {
