@@ -14,6 +14,8 @@ A terminal UI for running multiple processes in parallel. Like Turborepo's TUI, 
 - **Zero config** - Just pass commands as arguments
 - **Cross-platform** - macOS, Linux, Windows
 - **Native binary** - Fast startup, no runtime dependencies
+- **Wrapped lines** - Optional line wrapping per pane (`:w` label suffix)
+- **Interactive mode** - Focus a pane for full interactivity (with Mouse support)
 
 ## Installation
 
@@ -40,6 +42,12 @@ panex -n api,web,mobile "npm run api" "npm run web" "npm run mobile"
 # Full key passthrough for TUI apps (append ! to name)
 # Esc and Shift-Tab forwarded to process, click left panel to exit
 panex "tui" "npm run dev" -n "tui!,server"
+
+# Enable line wrapping (append :w to name)
+panex "npm run build" -n "build:w"
+
+# Combine suffixes (either order works)
+panex "helix" "npm run build" -n "helix!:w,build:w"
 ```
 
 ### Keyboard Shortcuts
@@ -53,6 +61,7 @@ panex "tui" "npm run dev" -n "tui!,server"
 | `r`         | Restart selected process          |
 | `x`         | Kill selected process             |
 | `A`         | Restart all processes             |
+| `w`         | Toggle line wrapping              |
 | `g`         | Toggle pin (freeze/follow output) |
 | `t`         | Jump to top                       |
 | `b`         | Jump to bottom                    |

@@ -15,11 +15,13 @@ pub struct ManagedProcess {
     pub pty: Option<PtyHandle>,
     pub scroll_offset: usize,
     pub auto_scroll: bool,
+    pub wrap_enabled: bool,
     shutdown: Arc<AtomicBool>,
 }
 
 impl ManagedProcess {
     pub fn new(config: ProcessConfig, cols: usize, rows: usize) -> Self {
+        let wrap_enabled = config.wrap_enabled;
         Self {
             config,
             status: ProcessStatus::Stopped,
@@ -27,6 +29,7 @@ impl ManagedProcess {
             pty: None,
             scroll_offset: 0,
             auto_scroll: true,
+            wrap_enabled,
             shutdown: Arc::new(AtomicBool::new(false)),
         }
     }

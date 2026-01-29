@@ -37,6 +37,7 @@ impl Widget for ProcessList<'_> {
                 let process = self.manager.get_process(name).unwrap();
                 let icon = process.status.icon();
                 let status_color = process.status.color();
+                let wrap = if process.wrap_enabled { "w" } else { " " };
                 let pin = if !process.auto_scroll { "⇅" } else { " " };
 
                 let is_selected = i == self.selected;
@@ -56,13 +57,19 @@ impl Widget for ProcessList<'_> {
                     style
                 };
 
-                // Calculate padding: icon(2) + name + spaces + pin(if any)
+                // Calculate padding: icon(2) + name + spaces + wrap(1) + pin(2)
                 let icon_width = 2; // icon + space
-                let pin_width = if pin.is_empty() { 0 } else { 2 }; // emoji width
-                let name_max = width.saturating_sub(icon_width + pin_width);
+                let indicators_width = 3; // wrap(1) + pin(2 for emoji width)
+                let name_max = width.saturating_sub(icon_width + indicators_width);
                 let display_name: String = name.chars().take(name_max).collect();
                 let name_len = display_name.chars().count();
-                let padding = width.saturating_sub(icon_width + name_len + pin_width);
+                let padding = width.saturating_sub(icon_width + name_len + indicators_width);
+
+                let wrap_style = if process.wrap_enabled {
+                    Style::default().fg(Color::Black).bg(Color::White)
+                } else {
+                    style
+                };
 
                 let pin_style = if !process.auto_scroll {
                     Style::default().fg(Color::White).bg(Color::Red)
@@ -77,6 +84,7 @@ impl Widget for ProcessList<'_> {
                     ),
                     Span::styled(display_name, bold_style),
                     Span::styled(" ".repeat(padding), style),
+                    Span::styled(wrap, wrap_style),
                     Span::styled(pin, pin_style),
                 ]);
 

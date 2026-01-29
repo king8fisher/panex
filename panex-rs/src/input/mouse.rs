@@ -10,6 +10,7 @@ pub fn handle_mouse(
     app: &mut App,
     pm: &mut ProcessManager,
     visible_height: usize,
+    viewport_width: usize,
 ) {
     let selected_name = pm.process_names().get(app.selected_index).cloned();
 
@@ -24,7 +25,7 @@ pub fn handle_mouse(
         MouseEventKind::ScrollDown => {
             if let Some(name) = selected_name {
                 if let Some(process) = pm.get_process_mut(&name) {
-                    scroll_down(process, SCROLL_AMOUNT, visible_height);
+                    scroll_down(process, SCROLL_AMOUNT, visible_height, viewport_width);
                 }
             }
         }

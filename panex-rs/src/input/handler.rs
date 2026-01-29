@@ -3,24 +3,29 @@ use crate::ui::output_panel::{scroll_down, scroll_to_bottom, scroll_to_top, scro
 use crate::ui::{App, InputMode};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
+/// Returns Some((cols, rows)) if a resize event was received (for debouncing in main loop)
 pub fn handle_event(
     event: Event,
     app: &mut App,
     pm: &mut ProcessManager,
     visible_height: usize,
-) {
+    viewport_width: usize,
+) -> Option<(u16, u16)> {
     match event {
-        Event::Key(key) => handle_key(key, app, pm, visible_height),
-        Event::Mouse(mouse) => super::mouse::handle_mouse(mouse, app, pm, visible_height),
-        Event::Resize(cols, rows) => {
-            // Output panel: total - process list (20) - delimiter (1), -1 row for status bar
-            pm.resize(cols.saturating_sub(21), rows.saturating_sub(1));
+        Event::Key(key) => {
+            handle_key(key, app, pm, visible_height, viewport_width);
+            None
         }
-        _ => {}
+        Event::Mouse(mouse) => {
+            super::mouse::handle_mouse(mouse, app, pm, visible_height, viewport_width);
+            None
+        }
+        Event::Resize(cols, rows) => Some((cols, rows)),
+        _ => None,
     }
 }
 
-fn handle_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_height: usize) {
+fn handle_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_height: usize, viewport_width: usize) {
     // Close help on any key
     if app.show_help {
         app.show_help = false;
@@ -28,12 +33,12 @@ fn handle_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_hei
     }
 
     match app.mode {
-        InputMode::Browse => handle_browse_key(key, app, pm, visible_height),
+        InputMode::Browse => handle_browse_key(key, app, pm, visible_height, viewport_width),
         InputMode::Focus => handle_focus_key(key, app, pm),
     }
 }
 
-fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_height: usize) {
+fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_height: usize, viewport_width: usize) {
     let count = pm.process_count();
     let selected_name = pm.process_names().get(app.selected_index).cloned();
 
@@ -66,6 +71,15 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
             }
         }
 
+        // Toggle wrap
+        KeyCode::Char('w') => {
+            if let Some(name) = selected_name {
+                if let Some(process) = pm.get_process_mut(&name) {
+                    process.wrap_enabled = !process.wrap_enabled;
+                }
+            }
+        }
+
         // Scrolling
         KeyCode::Char('g') => {
             // Toggle pin (auto_scroll)
@@ -74,7 +88,7 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
                     if process.auto_scroll {
                         process.auto_scroll = false;
                     } else {
-                        scroll_to_bottom(process, visible_height);
+                        scroll_to_bottom(process, visible_height, viewport_width);
                     }
                 }
             }
@@ -89,7 +103,7 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
         KeyCode::Char('b') => {
             if let Some(name) = selected_name {
                 if let Some(process) = pm.get_process_mut(&name) {
-                    scroll_to_bottom(process, visible_height);
+                    scroll_to_bottom(process, visible_height, viewport_width);
                 }
             }
         }
@@ -103,7 +117,7 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
         KeyCode::PageDown => {
             if let Some(name) = selected_name {
                 if let Some(process) = pm.get_process_mut(&name) {
-                    scroll_down(process, visible_height, visible_height);
+                    scroll_down(process, visible_height, visible_height, viewport_width);
                 }
             }
         }

@@ -32,6 +32,7 @@ dir = "panex-rs"
 run = """
 cargo run -- \
   "mise x fastfetch -- fastfetch" \
+  "mise x fastfetch -- fastfetch" \
   "mise x bottom -- btm" \
   "mise x lazygit -- lazygit" \
   "mise x yazi -- yazi" \
@@ -44,5 +45,5 @@ cargo run -- \
   "for i in {1..20}; do echo line $i; sleep 0.5; done" \
   "while true; do echo -e '\\033[31mRed\\033[0m \\033[32mGreen\\033[0m \\033[34mBlue\\033[0m \\033[33mYellow\\033[0m'; sleep 1; done" \
   "while true; do echo -e '\\033[1mBold\\033[0m \\033[4mUnderline\\033[0m \\033[1;32mBold Green\\033[0m'; sleep 1; done" \
-  -n fastfetch,bottom,lazygit,yazi,glow,gitui,gum,cowsay,ping,date,lines,colors,bold
+  -n fastfetch,fastfetch:w,bottom,lazygit,yazi,glow,gitui,gum,cowsay,ping,date,lines,colors,bold
 """

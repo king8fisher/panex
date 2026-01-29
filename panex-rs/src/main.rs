@@ -20,7 +20,8 @@ use ratatui::{
     layout::{Constraint, Layout},
     Terminal,
 };
-use std::io;
+use std::io::{self, Write};
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use ui::{
     help_popup::HelpPopup,
@@ -72,14 +73,24 @@ async fn run(config: PanexConfig) -> Result<()> {
 
     let result = run_app(&mut terminal, config).await;
 
+    // Disable mouse capture first to stop new mouse events
+    execute!(terminal.backend_mut(), DisableMouseCapture)?;
+
+    // Drain any pending input events to prevent leakage
+    while crossterm::event::poll(std::time::Duration::from_millis(10))? {
+        let _ = crossterm::event::read();
+    }
+
     // Restore terminal
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,
-        DisableMouseCapture
+        crossterm::style::ResetColor,
+        crossterm::style::SetAttribute(crossterm::style::Attribute::Reset),
     )?;
     terminal.show_cursor()?;
+    io::stdout().flush()?;
 
     result
 }
@@ -106,6 +117,11 @@ async fn run_app(
 
     let mut app = App::new(config.no_shift_tab);
     let mut event_stream = EventStream::new();
+
+    // Resize debouncing: store pending size, apply after 50ms of no new resize events
+    let mut pending_resize: Option<(u16, u16)> = None;
+    let mut resize_deadline: Option<Instant> = None;
+    const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
 
     loop {
         // Draw
@@ -150,10 +166,19 @@ async fn run_app(
 
         if app.should_quit {
             pm.shutdown();
+            // Wait for reader threads to notice shutdown and stop
+            tokio::time::sleep(Duration::from_millis(50)).await;
             break;
         }
 
-        let visible_height = terminal.size()?.height.saturating_sub(1) as usize; // -1 for status bar
+        let term_size = terminal.size()?;
+        let visible_height = term_size.height.saturating_sub(1) as usize; // -1 for status bar
+        let viewport_width = term_size.width.saturating_sub(21) as usize; // -20 for process list, -1 for delimiter
+
+        // Calculate timeout for resize debouncing
+        let timeout = resize_deadline
+            .map(|d| d.saturating_duration_since(Instant::now()))
+            .unwrap_or(Duration::MAX);
 
         // Handle events
         tokio::select! {
@@ -172,15 +197,28 @@ async fn run_app(
                         pm.handle_error(&name, &error);
                     }
                     AppEvent::Input(e) => {
-                        input::handle_event(e, &mut app, &mut pm, visible_height);
+                        if let Some((cols, rows)) = input::handle_event(e, &mut app, &mut pm, visible_height, viewport_width) {
+                            pending_resize = Some((cols, rows));
+                            resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
+                        }
                     }
                     AppEvent::Tick => {}
                 }
             }
             Some(Ok(event)) = event_stream.next() => {
                 if let Event::Key(_) | Event::Mouse(_) | Event::Resize(_, _) = event {
-                    input::handle_event(event, &mut app, &mut pm, visible_height);
+                    if let Some((cols, rows)) = input::handle_event(event, &mut app, &mut pm, visible_height, viewport_width) {
+                        pending_resize = Some((cols, rows));
+                        resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
+                    }
                 }
+            }
+            _ = tokio::time::sleep(timeout), if resize_deadline.is_some() => {
+                // Debounce period elapsed, apply resize
+                if let Some((cols, rows)) = pending_resize.take() {
+                    pm.resize(cols.saturating_sub(21), rows.saturating_sub(1));
+                }
+                resize_deadline = None;
             }
         }
     }

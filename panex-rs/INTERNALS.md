@@ -177,6 +177,30 @@ pm.resize(cols - 21, rows - 1);
 
 **Common bug**: Passing full terminal dimensions causes TUI apps to draw content that gets clipped or wrapped incorrectly.
 
+### Resize Debouncing
+
+Terminal resize events flood in during window dragging. Without debouncing, each event triggers PTY resize which causes TUI apps to redraw, creating an animation effect.
+
+Solution: Store pending resize dimensions, only apply after 50ms of no new resize events:
+
+```rust
+let mut pending_resize: Option<(u16, u16)> = None;
+let mut resize_deadline: Option<Instant> = None;
+const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
+
+tokio::select! {
+    // ... other branches ...
+    _ = tokio::time::sleep(timeout), if resize_deadline.is_some() => {
+        if let Some((cols, rows)) = pending_resize.take() {
+            pm.resize(cols.saturating_sub(21), rows.saturating_sub(1));
+        }
+        resize_deadline = None;
+    }
+}
+```
+
+Each new resize event resets the deadline, so resize only applies when dragging stops.
+
 ### Focus Indication
 
 Panel focus indicated via selected process item highlighting:
@@ -396,3 +420,119 @@ if event.column < 20 {
 ```
 
 The status bar shows "Click LPanel:exit" when key passthrough is enabled.
+
+## Line Wrapping
+
+### Default Behavior
+
+By default, lines longer than the viewport width are truncated at render time. This preserves content integrity for cursor-positioned output (like `fastfetch`) while allowing resize-wider to reveal hidden content.
+
+### Wrap Mode
+
+Users can enable line wrapping per process via:
+- **`w` key** in browse mode - toggles wrap on/off for selected process
+- **`:w` suffix** on process name - enables wrap at startup
+
+```bash
+# Enable wrapping at startup
+panex "npm run build" -n "build:w"
+
+# Combine with key passthrough (either order)
+panex "helix" -n "helix!:w"
+panex "helix" -n "helix:w!"
+```
+
+### Implementation
+
+When wrap is enabled, `OutputPanel::render()` splits long lines into multiple display lines:
+
+```rust
+if process.wrap_enabled && inner_width > 0 {
+    for line in buffer.iter() {
+        for chunk in line.cells.chunks(inner_width) {
+            wrapped_lines.push(Line::from(chunk_to_spans(chunk)));
+        }
+    }
+}
+```
+
+Scroll functions use `display_line_count()` to account for wrapped lines:
+
+```rust
+fn display_line_count(process: &ManagedProcess, viewport_width: usize) -> usize {
+    if process.wrap_enabled && viewport_width > 0 {
+        buffer.iter().map(|line| {
+            (line.cells.len() + viewport_width - 1) / viewport_width
+        }).sum()
+    } else {
+        process.buffer.content_line_count()
+    }
+}
+```
+
+### Visual Indicator
+
+Wrap state shown in process list as `w` (black on white) to the left of the pin indicator (⇅).
+
+### Suffix Parsing
+
+Suffixes set flags but the display name preserves the original form. This allows two processes with the same base name but different suffixes (e.g., `fastfetch` and `fastfetch:w`).
+
+```rust
+let name = raw_name.clone();  // Preserve original
+let mut temp = raw_name;
+
+loop {
+    if temp.ends_with('!') {
+        temp = temp.trim_end_matches('!').to_string();
+        proc_no_shift_tab = true;
+    } else if temp.ends_with(":w") {
+        temp = temp.trim_end_matches(":w").to_string();
+        wrap_enabled = true;
+    } else {
+        break;
+    }
+}
+```
+
+## Clean Shutdown
+
+### The Problem
+
+On quit, escape sequences can leak to the user's shell prompt. Two sources:
+
+1. **PTY output** - Child processes may still have buffered output when killed
+2. **Mouse events** - SGR mouse sequences (`\x1b[<64;51;16M`) buffered in terminal input
+
+Example leak after scrolling in glow: `64;51;16M64;51;16M64;51;16M...`
+
+### Solution
+
+Shutdown sequence in `run()`:
+
+```rust
+// 1. Kill processes and wait for reader threads
+pm.shutdown();
+tokio::time::sleep(Duration::from_millis(50)).await;
+
+// 2. Disable mouse capture first (stops new events)
+execute!(terminal.backend_mut(), DisableMouseCapture)?;
+
+// 3. Drain pending input events
+while crossterm::event::poll(Duration::from_millis(10))? {
+    let _ = crossterm::event::read();
+}
+
+// 4. Restore terminal state
+disable_raw_mode()?;
+execute!(
+    terminal.backend_mut(),
+    LeaveAlternateScreen,
+    ResetColor,
+    SetAttribute(Attribute::Reset),
+)?;
+terminal.show_cursor()?;
+io::stdout().flush()?;
+```
+
+Key insight: `DisableMouseCapture` must happen before draining events, otherwise terminal keeps sending mouse sequences while we try to drain them.

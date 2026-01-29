@@ -34,6 +34,7 @@ pub struct ProcessConfig {
     pub name: String,
     pub command: String,
     pub no_shift_tab: bool, // Per-process shift-tab disable
+    pub wrap_enabled: bool, // Per-process line wrapping
 }
 
 #[derive(Debug, Clone)]
@@ -56,16 +57,30 @@ impl PanexConfig {
                     .get(i)
                     .cloned()
                     .unwrap_or_else(|| format!("proc{}", i + 1));
-                // Name ending with '!' disables shift-tab for this process
-                let (name, proc_no_shift_tab) = if raw_name.ends_with('!') {
-                    (raw_name.trim_end_matches('!').to_string(), true)
-                } else {
-                    (raw_name, false)
-                };
+                // Parse suffixes: '!' disables shift-tab, ':w' enables wrapping
+                // Suffixes set flags but name keeps original form (for uniqueness)
+                let name = raw_name.clone();
+                let mut temp = raw_name;
+                let mut proc_no_shift_tab = false;
+                let mut wrap_enabled = false;
+
+                // Loop to detect suffixes in any order
+                loop {
+                    if temp.ends_with('!') {
+                        temp = temp.trim_end_matches('!').to_string();
+                        proc_no_shift_tab = true;
+                    } else if temp.ends_with(":w") {
+                        temp = temp.trim_end_matches(":w").to_string();
+                        wrap_enabled = true;
+                    } else {
+                        break;
+                    }
+                }
                 ProcessConfig {
                     name,
                     command: cmd,
                     no_shift_tab: proc_no_shift_tab,
+                    wrap_enabled,
                 }
             })
             .collect();
