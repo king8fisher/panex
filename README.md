@@ -1,3 +1,5 @@
+[![npm version](https://img.shields.io/npm/v/panex.svg)](https://www.npmjs.com/package/panex)
+
 # panex
 
 A terminal UI for running multiple processes in parallel. Like Turborepo's TUI, without the monorepo.
@@ -38,20 +40,20 @@ panex -n api,web,mobile "npm run api" "npm run web" "npm run mobile"
 
 ### Keyboard Shortcuts
 
-| Key          | Action                           |
-| ------------ | -------------------------------- |
-| `↑/↓`        | Navigate process list            |
-| `Enter/Tab`  | Focus process (interactive mode) |
-| `Esc`        | Exit focus mode                  |
-| `r`          | Restart selected process         |
-| `x`          | Kill selected process            |
-| `A`          | Restart all processes            |
-| `g`          | Toggle pin (freeze/follow output)|
-| `t`          | Jump to top                      |
-| `b`          | Jump to bottom                   |
-| `PgUp/PgDn`  | Scroll output                    |
-| `?`          | Show help                        |
-| `q`          | Quit panex                       |
+| Key         | Action                            |
+| ----------- | --------------------------------- |
+| `↑/↓`       | Navigate process list             |
+| `Enter/Tab` | Focus process (interactive mode)  |
+| `Esc`       | Exit focus mode                   |
+| `r`         | Restart selected process          |
+| `x`         | Kill selected process             |
+| `A`         | Restart all processes             |
+| `g`         | Toggle pin (freeze/follow output) |
+| `t`         | Jump to top                       |
+| `b`         | Jump to bottom                    |
+| `PgUp/PgDn` | Scroll output                     |
+| `?`         | Show help                         |
+| `q`         | Quit panex                        |
 
 ## Why panex?
 
