@@ -1,3 +1,4 @@
+use crate::config::ProcessStatus;
 use crate::process::ProcessManager;
 use crate::ui::InputMode;
 use ratatui::{
@@ -7,6 +8,21 @@ use ratatui::{
     text::{Line, Span},
     widgets::{List, ListItem, Widget},
 };
+
+/// Strip display suffixes (:w, !) from process name for rendering
+fn strip_suffixes(name: &str) -> &str {
+    let mut s = name;
+    loop {
+        if let Some(stripped) = s.strip_suffix('!') {
+            s = stripped;
+        } else if let Some(stripped) = s.strip_suffix(":w") {
+            s = stripped;
+        } else {
+            break;
+        }
+    }
+    s
+}
 
 pub struct ProcessList<'a> {
     manager: &'a ProcessManager,
@@ -50,9 +66,16 @@ impl Widget for ProcessList<'_> {
                     Color::Reset
                 };
 
+                let is_stopped = matches!(
+                    process.status,
+                    ProcessStatus::Stopped | ProcessStatus::Exited(_) | ProcessStatus::Failed(_)
+                );
+
                 let style = Style::default().bg(bg_color);
-                let bold_style = if is_selected {
+                let name_style = if is_selected {
                     style.add_modifier(Modifier::BOLD)
+                } else if is_stopped {
+                    style.fg(Color::DarkGray)
                 } else {
                     style
                 };
@@ -61,7 +84,8 @@ impl Widget for ProcessList<'_> {
                 let icon_width = 2; // icon + space
                 let indicators_width = 3; // wrap(1) + pin(2 for emoji width)
                 let name_max = width.saturating_sub(icon_width + indicators_width);
-                let display_name: String = name.chars().take(name_max).collect();
+                let stripped_name = strip_suffixes(name);
+                let display_name: String = stripped_name.chars().take(name_max).collect();
                 let name_len = display_name.chars().count();
                 let padding = width.saturating_sub(icon_width + name_len + indicators_width);
 
@@ -82,7 +106,7 @@ impl Widget for ProcessList<'_> {
                         format!("{} ", icon),
                         Style::default().fg(status_color).bg(bg_color),
                     ),
-                    Span::styled(display_name, bold_style),
+                    Span::styled(display_name, name_style),
                     Span::styled(" ".repeat(padding), style),
                     Span::styled(wrap, wrap_style),
                     Span::styled(pin, pin_style),
