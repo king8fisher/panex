@@ -2,22 +2,13 @@
 
 A terminal UI for running multiple processes in parallel. Like Turborepo's TUI, without the monorepo.
 
-```
-┌──────────────┬──────────────────────────────────────────────┐
-│              │ api                                          │
-│ ▶ api    ●   │                                              │
-│   web    ●   │ Server listening on http://localhost:3001    │
-│   mobile ●   │ {"level":30,"msg":"request completed"}       │
-│              │                                              │
-├──────────────┴──────────────────────────────────────────────┤
-│ [↑↓] select  [enter] focus  [r] restart  [q] quit           │
-└─────────────────────────────────────────────────────────────┘
-```
+![panex screenshot](docs/screenshot.png)
 
 ## Features
 
 - **Split-pane TUI** - See all your processes at once
 - **Full PTY support** - QR codes, colors, interactive prompts work
+- **Scroll pinning** - Freeze output to inspect, toggle with `g`
 - **Zero config** - Just pass commands as arguments
 - **Cross-platform** - macOS, Linux, Windows
 - **Native binary** - Fast startup, no runtime dependencies
@@ -47,18 +38,20 @@ panex -n api,web,mobile "npm run api" "npm run web" "npm run mobile"
 
 ### Keyboard Shortcuts
 
-| Key            | Action                           |
-| -------------- | -------------------------------- |
-| `↑/↓` or `j/k` | Navigate process list            |
-| `Enter`        | Focus process (interactive mode) |
-| `Esc`          | Exit focus mode                  |
-| `r`            | Restart selected process         |
-| `x`            | Kill selected process            |
-| `A`            | Restart all processes            |
-| `q`            | Quit panex                       |
-| `?`            | Show help                        |
-| `g/G`          | Scroll to top/bottom             |
-| `PgUp/PgDn`    | Scroll output                    |
+| Key          | Action                           |
+| ------------ | -------------------------------- |
+| `↑/↓`        | Navigate process list            |
+| `Enter/Tab`  | Focus process (interactive mode) |
+| `Esc`        | Exit focus mode                  |
+| `r`          | Restart selected process         |
+| `x`          | Kill selected process            |
+| `A`          | Restart all processes            |
+| `g`          | Toggle pin (freeze/follow output)|
+| `t`          | Jump to top                      |
+| `b`          | Jump to bottom                   |
+| `PgUp/PgDn`  | Scroll output                    |
+| `?`          | Show help                        |
+| `q`          | Quit panex                       |
 
 ## Why panex?
 

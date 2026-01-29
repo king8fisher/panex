@@ -266,11 +266,18 @@ This ensures manual scrolling and rendering never show trailing empty lines.
 
 Users can disable auto-scroll ("pin") by:
 - Scrolling up manually
-- Pressing `g` to go to top
+- Pressing `g` to toggle pin state
+- Pressing `t` to jump to top (auto-pins)
 
-Pin indicator (⇅) appears in process list when pinned. Re-enables when:
-- User scrolls to bottom
-- Presses `G` to go to bottom
+Pin indicator (⇅) appears in process list (white on red) when pinned. Re-enables when:
+- Pressing `g` again to toggle back
+- Pressing `b` to jump to bottom
+- User scrolls to bottom manually
+
+Keybindings:
+- `g` - Toggle pin (if following → pin; if pinned → unpin and follow)
+- `t` - Jump to top (pins)
+- `b` - Jump to bottom (unpins)
 
 ## Mouse Handling
 
