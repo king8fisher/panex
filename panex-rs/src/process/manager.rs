@@ -1,6 +1,6 @@
 use super::{PtyHandle, TerminalBuffer};
 use crate::config::{ProcessConfig, ProcessStatus};
-use crate::event::AppEvent;
+use crate::event::{AppEvent, Generation};
 use anyhow::Result;
 use std::collections::HashMap;
 use std::io::Read;
@@ -16,6 +16,7 @@ pub struct ManagedProcess {
     pub scroll_offset: usize,
     pub auto_scroll: bool,
     pub wrap_enabled: bool,
+    pub generation: Generation,
     shutdown: Arc<AtomicBool>,
 }
 
@@ -30,6 +31,7 @@ impl ManagedProcess {
             scroll_offset: 0,
             auto_scroll: true,
             wrap_enabled,
+            generation: 0,
             shutdown: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -70,6 +72,10 @@ impl ProcessManager {
         // Stop existing reader thread
         process.shutdown.store(true, Ordering::SeqCst);
 
+        // Increment generation so old events are ignored
+        process.generation += 1;
+        let generation = process.generation;
+
         let pty = PtyHandle::spawn(&process.config.command, self.cols, self.rows)?;
         process.pty = Some(pty);
         process.status = ProcessStatus::Running;
@@ -96,17 +102,17 @@ impl ProcessManager {
                 match reader_guard.read(&mut buf) {
                     Ok(0) => {
                         drop(reader_guard);
-                        let _ = tx.send(AppEvent::ProcessExited(proc_name.clone(), None));
+                        let _ = tx.send(AppEvent::ProcessExited(proc_name.clone(), generation, None));
                         break;
                     }
                     Ok(n) => {
                         drop(reader_guard);
-                        let _ = tx.send(AppEvent::ProcessOutput(proc_name.clone(), buf[..n].to_vec()));
+                        let _ = tx.send(AppEvent::ProcessOutput(proc_name.clone(), generation, buf[..n].to_vec()));
                     }
                     Err(e) => {
                         drop(reader_guard);
                         if !shutdown.load(Ordering::SeqCst) {
-                            let _ = tx.send(AppEvent::ProcessError(proc_name.clone(), e.to_string()));
+                            let _ = tx.send(AppEvent::ProcessError(proc_name.clone(), generation, e.to_string()));
                         }
                         break;
                     }
@@ -128,17 +134,20 @@ impl ProcessManager {
 
     pub fn restart_process(&mut self, name: &str) -> Result<()> {
         self.kill_process(name)?;
-        // Small delay to allow cleanup
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        // Generation counter ensures old events are ignored, minimal delay needed
+        std::thread::sleep(std::time::Duration::from_millis(50));
         self.start_process(name)
     }
 
     pub fn restart_all(&mut self) -> Result<()> {
         let names: Vec<_> = self.process_order.clone();
+        // Kill all first
         for name in &names {
             let _ = self.kill_process(name);
         }
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        // Brief delay for cleanup
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        // Start all - generation counter ensures old events are ignored
         for name in names {
             self.start_process(&name)?;
         }
@@ -177,8 +186,13 @@ impl ProcessManager {
         }
     }
 
-    pub fn handle_output(&mut self, name: &str, data: &[u8]) {
+    pub fn handle_output(&mut self, name: &str, gen: Generation, data: &[u8]) {
         if let Some(process) = self.processes.get_mut(name) {
+            // Ignore events from old process instances
+            if process.generation != gen {
+                return;
+            }
+
             process.buffer.write(data);
 
             // Send any pending responses (e.g., device attributes queries)
@@ -203,8 +217,13 @@ impl ProcessManager {
         }
     }
 
-    pub fn handle_exit(&mut self, name: &str, code: Option<i32>) {
+    pub fn handle_exit(&mut self, name: &str, gen: Generation, code: Option<i32>) {
         if let Some(process) = self.processes.get_mut(name) {
+            // Ignore events from old process instances
+            if process.generation != gen {
+                return;
+            }
+
             process.shutdown.store(true, Ordering::SeqCst);
             process.pty = None;
             process.status = match code {
@@ -214,8 +233,13 @@ impl ProcessManager {
         }
     }
 
-    pub fn handle_error(&mut self, name: &str, error: &str) {
+    pub fn handle_error(&mut self, name: &str, gen: Generation, error: &str) {
         if let Some(process) = self.processes.get_mut(name) {
+            // Ignore events from old process instances
+            if process.generation != gen {
+                return;
+            }
+
             process.shutdown.store(true, Ordering::SeqCst);
             process.pty = None;
             process.status = ProcessStatus::Failed(error.to_string());

@@ -184,17 +184,17 @@ async fn run_app(
         tokio::select! {
             Some(event) = event_rx.recv() => {
                 match event {
-                    AppEvent::ProcessOutput(name, data) => {
-                        pm.handle_output(&name, &data);
+                    AppEvent::ProcessOutput(name, gen, data) => {
+                        pm.handle_output(&name, gen, &data);
                     }
                     AppEvent::ProcessStarted(_name) => {
                         // Could show notification
                     }
-                    AppEvent::ProcessExited(name, code) => {
-                        pm.handle_exit(&name, code);
+                    AppEvent::ProcessExited(name, gen, code) => {
+                        pm.handle_exit(&name, gen, code);
                     }
-                    AppEvent::ProcessError(name, error) => {
-                        pm.handle_error(&name, &error);
+                    AppEvent::ProcessError(name, gen, error) => {
+                        pm.handle_error(&name, gen, &error);
                     }
                     AppEvent::Input(e) => {
                         if let Some((cols, rows)) = input::handle_event(e, &mut app, &mut pm, visible_height, viewport_width) {
