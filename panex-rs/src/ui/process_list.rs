@@ -42,7 +42,7 @@ impl Widget for ProcessList<'_> {
                 let is_selected = i == self.selected;
                 let bg_color = if is_selected {
                     match self.mode {
-                        InputMode::Normal => Color::Blue,
+                        InputMode::Browse => Color::Blue,
                         InputMode::Focus => Color::DarkGray,
                     }
                 } else {

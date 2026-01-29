@@ -180,7 +180,7 @@ pm.resize(cols - 21, rows - 1);
 ### Focus Indication
 
 Panel focus indicated via selected process item highlighting:
-- **Normal mode** (process list focused): Blue background on selected item
+- **Browse mode** (process list focused): Blue background on selected item
 - **Focus mode** (output panel focused): Dark gray background on selected item
 
 No borders on panels - saves space and reduces visual clutter.

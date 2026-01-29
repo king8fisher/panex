@@ -1,7 +1,38 @@
+use ratatui::{
+    style::{Color, Modifier, Style},
+    text::Span,
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
-    Normal,
+    Browse,
     Focus,
+}
+
+impl InputMode {
+    pub fn label(&self) -> &'static str {
+        match self {
+            InputMode::Browse => " BROWSE ",
+            InputMode::Focus => " FOCUS ",
+        }
+    }
+
+    pub fn color(&self) -> Color {
+        match self {
+            InputMode::Browse => Color::Blue,
+            InputMode::Focus => Color::Green,
+        }
+    }
+
+    pub fn styled_label(&self) -> Span<'static> {
+        Span::styled(
+            self.label(),
+            Style::default()
+                .fg(Color::Black)
+                .bg(self.color())
+                .add_modifier(Modifier::BOLD),
+        )
+    }
 }
 
 pub struct App {
@@ -16,7 +47,7 @@ impl App {
     pub fn new(no_shift_tab: bool) -> Self {
         Self {
             selected_index: 0,
-            mode: InputMode::Normal,
+            mode: InputMode::Browse,
             show_help: false,
             should_quit: false,
             no_shift_tab,
@@ -40,7 +71,7 @@ impl App {
     }
 
     pub fn exit_focus(&mut self) {
-        self.mode = InputMode::Normal;
+        self.mode = InputMode::Browse;
     }
 
     pub fn toggle_help(&mut self) {

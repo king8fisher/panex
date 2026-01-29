@@ -28,12 +28,12 @@ fn handle_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_hei
     }
 
     match app.mode {
-        InputMode::Normal => handle_normal_key(key, app, pm, visible_height),
+        InputMode::Browse => handle_browse_key(key, app, pm, visible_height),
         InputMode::Focus => handle_focus_key(key, app, pm),
     }
 }
 
-fn handle_normal_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_height: usize) {
+fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_height: usize) {
     let count = pm.process_count();
     let selected_name = pm.process_names().get(app.selected_index).cloned();
 
