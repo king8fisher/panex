@@ -177,10 +177,24 @@ impl ProcessManager {
     pub fn handle_output(&mut self, name: &str, data: &[u8]) {
         if let Some(process) = self.processes.get_mut(name) {
             process.buffer.write(data);
+
+            // Send any pending responses (e.g., device attributes queries)
+            let responses = process.buffer.take_pending_responses();
+            if let Some(ref pty) = process.pty {
+                for response in responses {
+                    let _ = pty.write(&response);
+                }
+            }
+
             if process.auto_scroll {
-                let total = process.buffer.line_count();
+                let cursor_row = process.buffer.cursor_row();
                 let visible = self.rows as usize;
-                process.scroll_offset = total.saturating_sub(visible);
+                // Scroll to keep cursor visible, preferring to show cursor near bottom
+                if cursor_row >= visible {
+                    process.scroll_offset = cursor_row.saturating_sub(visible) + 1;
+                } else {
+                    process.scroll_offset = 0;
+                }
             }
         }
     }

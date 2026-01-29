@@ -28,6 +28,11 @@ impl Default for Line {
 }
 
 pub struct TerminalBuffer {
+    state: TerminalState,
+    parser: vte::Parser,
+}
+
+struct TerminalState {
     lines: VecDeque<Line>,
     cursor_row: usize,
     cursor_col: usize,
@@ -35,10 +40,47 @@ pub struct TerminalBuffer {
     rows: usize,
     current_style: Style,
     saved_cursor: Option<(usize, usize)>,
+    pending_responses: Vec<Vec<u8>>,
 }
 
 impl TerminalBuffer {
     pub fn new(cols: usize, rows: usize) -> Self {
+        Self {
+            state: TerminalState::new(cols, rows),
+            parser: vte::Parser::new(),
+        }
+    }
+
+    pub fn resize(&mut self, cols: usize, rows: usize) {
+        self.state.cols = cols;
+        self.state.rows = rows;
+    }
+
+    pub fn write(&mut self, data: &[u8]) {
+        for byte in data {
+            self.parser.advance(&mut self.state, *byte);
+        }
+    }
+
+    pub fn line_count(&self) -> usize {
+        self.state.lines.len()
+    }
+
+    pub fn get_all_lines(&self) -> &VecDeque<Line> {
+        &self.state.lines
+    }
+
+    pub fn cursor_row(&self) -> usize {
+        self.state.cursor_row
+    }
+
+    pub fn take_pending_responses(&mut self) -> Vec<Vec<u8>> {
+        std::mem::take(&mut self.state.pending_responses)
+    }
+}
+
+impl TerminalState {
+    fn new(cols: usize, rows: usize) -> Self {
         let mut lines = VecDeque::with_capacity(MAX_SCROLLBACK);
         lines.push_back(Line::new());
         Self {
@@ -49,27 +91,8 @@ impl TerminalBuffer {
             rows,
             current_style: Style::default(),
             saved_cursor: None,
+            pending_responses: Vec::new(),
         }
-    }
-
-    pub fn resize(&mut self, cols: usize, rows: usize) {
-        self.cols = cols;
-        self.rows = rows;
-    }
-
-    pub fn write(&mut self, data: &[u8]) {
-        let mut parser = vte::Parser::new();
-        for byte in data {
-            parser.advance(self, *byte);
-        }
-    }
-
-    pub fn line_count(&self) -> usize {
-        self.lines.len()
-    }
-
-    pub fn get_all_lines(&self) -> &VecDeque<Line> {
-        &self.lines
     }
 
     fn ensure_row(&mut self, row: usize) {
@@ -239,7 +262,7 @@ fn bright_ansi_to_color(n: u16) -> Color {
     }
 }
 
-impl Perform for TerminalBuffer {
+impl Perform for TerminalState {
     fn print(&mut self, c: char) {
         self.put_char(c);
     }
@@ -379,6 +402,27 @@ impl Perform for TerminalBuffer {
                 if let Some((row, col)) = self.saved_cursor {
                     self.cursor_row = row;
                     self.cursor_col = col;
+                }
+            }
+            'c' => {
+                // Device Attributes (DA) - respond as VT100 with AVO
+                // Apps like glow query this and timeout if no response
+                self.pending_responses.push(b"\x1b[?1;2c".to_vec());
+            }
+            'n' => {
+                // Device Status Report (DSR)
+                let mode = get_param(0, 0);
+                match mode {
+                    5 => {
+                        // Status report - respond "OK"
+                        self.pending_responses.push(b"\x1b[0n".to_vec());
+                    }
+                    6 => {
+                        // Cursor position report
+                        let response = format!("\x1b[{};{}R", self.cursor_row + 1, self.cursor_col + 1);
+                        self.pending_responses.push(response.into_bytes());
+                    }
+                    _ => {}
                 }
             }
             _ => {}
