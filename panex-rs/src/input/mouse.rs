@@ -31,13 +31,9 @@ pub fn handle_mouse(
         MouseEventKind::Down(_) => {
             // Check if click is in process list area (first 20 columns)
             if event.column < 20 {
-                let row = event.row as usize;
-                // Account for border (1 row)
-                if row > 0 {
-                    let index = row - 1;
-                    if index < pm.process_count() {
-                        app.selected_index = index;
-                    }
+                let index = event.row as usize;
+                if index < pm.process_count() {
+                    app.selected_index = index;
                 }
             }
         }

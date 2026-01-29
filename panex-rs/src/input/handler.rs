@@ -13,7 +13,8 @@ pub fn handle_event(
         Event::Key(key) => handle_key(key, app, pm, visible_height),
         Event::Mouse(mouse) => super::mouse::handle_mouse(mouse, app, pm, visible_height),
         Event::Resize(cols, rows) => {
-            pm.resize(cols, rows.saturating_sub(1)); // -1 for status bar
+            // Output panel: total - process list (20) - delimiter (1), -1 row for status bar
+            pm.resize(cols.saturating_sub(21), rows.saturating_sub(1));
         }
         _ => {}
     }

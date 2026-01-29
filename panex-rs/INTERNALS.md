@@ -140,3 +140,125 @@ Full support for:
 - Max lines: 10,000 (`MAX_SCROLLBACK`)
 - Storage: `VecDeque<Line>` for efficient front/back operations
 - Auto-scroll follows cursor position, not buffer end
+
+## UI Layout & PTY Sizing
+
+### Screen Layout
+
+```
+┌────────────────────┬─┬──────────────────────────────────────┐
+│                    │ │                                      │
+│   Process List     │D│          Output Panel                │
+│   (20 cols)        │E│    (width - 21 cols)                 │
+│                    │L│                                      │
+│                    │ │                                      │
+├────────────────────┴─┴──────────────────────────────────────┤
+│                      Status Bar (1 row)                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+- Process list: fixed 20 columns
+- Delimiter: 1 column (empty space)
+- Output panel: remaining width (`total_width - 21`)
+- Status bar: 1 row at bottom
+
+### PTY Size Calculation
+
+The PTY must be told the exact dimensions of the output panel, not the full terminal size. TUI apps (lazygit, btm, gitui) query terminal size via SIGWINCH and draw accordingly.
+
+```rust
+// Initial size
+let output_cols = terminal_width - 21;  // process list + delimiter
+let output_rows = terminal_height - 1;   // status bar
+
+// On resize event
+pm.resize(cols - 21, rows - 1);
+```
+
+**Common bug**: Passing full terminal dimensions causes TUI apps to draw content that gets clipped or wrapped incorrectly.
+
+### Focus Indication
+
+Panel focus indicated via selected process item highlighting:
+- **Normal mode** (process list focused): Blue background on selected item
+- **Focus mode** (output panel focused): Dark gray background on selected item
+
+No borders on panels - saves space and reduces visual clutter.
+
+## Auto-Scroll Behavior
+
+### The Problem with TUI Apps
+
+Full-screen TUI apps (lazygit, gitui, btm) exhibited a "jumping" behavior where the display would shift one row down, then back up on each redraw. The top row would disappear momentarily.
+
+**Root cause**: Our terminal emulator wraps immediately when cursor reaches the last column, setting `cursor_row = visible`. Real terminals use "pending wrap" state where cursor stays at the last column until the next character.
+
+```
+Real terminal:          Our implementation:
+─────────────────       ─────────────────
+Print at (22, 58)       Print at (22, 58)
+cursor = (22, 58)       cursor = (23, 0)  ← wrapped immediately
+pending_wrap = true
+```
+
+### The Auto-Scroll Logic
+
+Original (buggy) logic:
+```rust
+if cursor_row >= visible {
+    scroll_offset = cursor_row - visible + 1;
+}
+```
+
+When `cursor_row == visible` (e.g., 23 == 23):
+- Scroll offset becomes 1
+- Row 0 is hidden
+- On next redraw, app moves cursor back, offset resets to 0
+- **Result**: Flicker/jumping
+
+Fixed logic:
+```rust
+if cursor_row > visible {  // Changed from >=
+    scroll_offset = cursor_row - (visible - 1);
+}
+```
+
+When `cursor_row == visible`:
+- Condition is false, no scroll
+- Row 0 stays visible
+- **Result**: Stable display for TUI apps
+
+### Why This Works
+
+For TUI apps:
+- They draw within a fixed viewport (rows 0 to visible-1)
+- Cursor at row `visible` is transient (wrap state, no actual content)
+- Not scrolling keeps their intended viewport intact
+
+For scrollback (cat, long output):
+- Real content on row `visible+1` triggers scroll
+- Still follows cursor when there's actual content below viewport
+
+### Pin Feature
+
+Users can disable auto-scroll ("pin") by:
+- Scrolling up manually
+- Pressing `g` to go to top
+
+Pin indicator (📌) appears in process list when pinned. Re-enables when:
+- User scrolls to bottom
+- Presses `G` to go to bottom
+
+## Mouse Handling
+
+Click detection for process selection:
+```rust
+if event.column < 20 {  // Within process list
+    let index = event.row as usize;  // Direct mapping, no border offset
+    if index < process_count {
+        selected_index = index;
+    }
+}
+```
+
+Scroll wheel works on output panel regardless of click position.

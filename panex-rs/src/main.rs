@@ -91,7 +91,10 @@ async fn run_app(
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AppEvent>();
 
     let size = terminal.size()?;
-    let mut pm = ProcessManager::new(event_tx.clone(), size.width, size.height.saturating_sub(1));
+    // Output panel width = total - process list (20) - delimiter (1)
+    let output_cols = size.width.saturating_sub(21);
+    let output_rows = size.height.saturating_sub(1); // -1 for status bar
+    let mut pm = ProcessManager::new(event_tx.clone(), output_cols, output_rows);
 
     // Add processes
     for proc_config in &config.processes {
@@ -117,6 +120,7 @@ async fn run_app(
 
             let content_chunks = Layout::horizontal([
                 Constraint::Length(20),
+                Constraint::Length(1), // delimiter
                 Constraint::Min(0),
             ])
             .split(main_chunks[0]);
@@ -129,7 +133,7 @@ async fn run_app(
             let selected_name = pm.process_names().get(app.selected_index).cloned();
             let selected_process = selected_name.as_ref().and_then(|n| pm.get_process(n));
             let output_panel = OutputPanel::new(selected_process, app.mode);
-            f.render_widget(output_panel, content_chunks[1]);
+            f.render_widget(output_panel, content_chunks[2]);
 
             // Status bar
             let status_bar = StatusBar::new(app.mode, app.no_shift_tab);
@@ -146,7 +150,7 @@ async fn run_app(
             break;
         }
 
-        let visible_height = terminal.size()?.height.saturating_sub(3) as usize;
+        let visible_height = terminal.size()?.height.saturating_sub(1) as usize; // -1 for status bar
 
         // Handle events
         tokio::select! {
