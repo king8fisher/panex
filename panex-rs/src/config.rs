@@ -33,6 +33,7 @@ impl ProcessStatus {
 pub struct ProcessConfig {
     pub name: String,
     pub command: String,
+    pub no_shift_tab: bool, // Per-process shift-tab disable
 }
 
 #[derive(Debug, Clone)]
@@ -51,11 +52,21 @@ impl PanexConfig {
             .into_iter()
             .enumerate()
             .map(|(i, cmd)| {
-                let name = name_list
+                let raw_name = name_list
                     .get(i)
                     .cloned()
                     .unwrap_or_else(|| format!("proc{}", i + 1));
-                ProcessConfig { name, command: cmd }
+                // Name ending with '!' disables shift-tab for this process
+                let (name, proc_no_shift_tab) = if raw_name.ends_with('!') {
+                    (raw_name.trim_end_matches('!').to_string(), true)
+                } else {
+                    (raw_name, false)
+                };
+                ProcessConfig {
+                    name,
+                    command: cmd,
+                    no_shift_tab: proc_no_shift_tab,
+                }
             })
             .collect();
 

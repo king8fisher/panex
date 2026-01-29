@@ -116,13 +116,23 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
 }
 
 fn handle_focus_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager) {
-    // Check for exit keys
+    let selected_name = pm.process_names().get(app.selected_index).cloned();
+
+    // Check per-process no_shift_tab (overrides global)
+    let proc_no_shift_tab = selected_name
+        .as_ref()
+        .and_then(|n| pm.get_process(n))
+        .map(|p| p.config.no_shift_tab)
+        .unwrap_or(false);
+    let no_shift_tab = app.no_shift_tab || proc_no_shift_tab;
+
+    // Check for exit keys (unless no_shift_tab is set, then only mouse click exits)
     match key.code {
-        KeyCode::Esc => {
+        KeyCode::Esc if !no_shift_tab => {
             app.exit_focus();
             return;
         }
-        KeyCode::BackTab if !app.no_shift_tab => {
+        KeyCode::BackTab if !no_shift_tab => {
             app.exit_focus();
             return;
         }
@@ -130,7 +140,6 @@ fn handle_focus_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager) {
     }
 
     // Forward key to PTY
-    let selected_name = pm.process_names().get(app.selected_index).cloned();
     if let Some(name) = selected_name {
         if let Some(bytes) = key_to_bytes(key) {
             let _ = pm.write_to_process(&name, &bytes);
@@ -160,6 +169,7 @@ fn key_to_bytes(key: KeyEvent) -> Option<Vec<u8>> {
         }
         KeyCode::Enter => vec![0x0d],
         KeyCode::Tab => vec![0x09],
+        KeyCode::BackTab => vec![0x1b, b'[', b'Z'], // Shift-Tab (CSI Z)
         KeyCode::Backspace => vec![0x7f],
         KeyCode::Delete => vec![0x1b, b'[', b'3', b'~'],
         KeyCode::Esc => vec![0x1b],

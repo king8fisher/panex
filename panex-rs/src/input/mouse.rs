@@ -29,12 +29,23 @@ pub fn handle_mouse(
             }
         }
         MouseEventKind::Down(_) => {
-            // Check if click is in process list area (first 20 columns)
-            if event.column < 20 {
+            let is_status_bar = event.row as usize >= visible_height;
+
+            if is_status_bar {
+                // Click on status bar - exit focus mode
+                app.exit_focus();
+            } else if event.column < 20 {
+                // Click on left panel
                 let index = event.row as usize;
+                // Select process only if clicking on a valid row
                 if index < pm.process_count() {
                     app.selected_index = index;
                 }
+                // Always exit focus when clicking left panel
+                app.exit_focus();
+            } else if event.column >= 21 {
+                // Click on right panel (output) - enter focus mode
+                app.enter_focus();
             }
         }
         _ => {}

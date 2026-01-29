@@ -3,6 +3,7 @@ use std::collections::VecDeque;
 use vte::{Params, Perform};
 
 const MAX_SCROLLBACK: usize = 10_000;
+const MAX_LINE_WIDTH: usize = 2000; // Max column to prevent runaway memory allocation
 
 #[derive(Debug, Clone, Default)]
 pub struct Cell {
@@ -138,9 +139,8 @@ impl TerminalState {
             style: self.current_style,
         };
         self.cursor_col += 1;
-        if self.cursor_col >= self.cols {
-            self.newline();
-        }
+        // Don't auto-wrap: let lines grow as needed, truncate at render time.
+        // This prevents content corruption when terminal is resized narrower.
     }
 
     fn clear_line_from(&mut self, col: usize) {
@@ -284,7 +284,7 @@ impl Perform for TerminalState {
             0x09 => {
                 // Tab
                 let next_tab = (self.cursor_col + 8) & !7;
-                self.cursor_col = next_tab.min(self.cols - 1);
+                self.cursor_col = next_tab.min(MAX_LINE_WIDTH - 1);
             }
             0x0A | 0x0B | 0x0C => {
                 // LF, VT, FF
@@ -325,7 +325,7 @@ impl Perform for TerminalState {
             'C' => {
                 // Cursor forward
                 let n = get_param(0, 1) as usize;
-                self.cursor_col = (self.cursor_col + n).min(self.cols - 1);
+                self.cursor_col = (self.cursor_col + n).min(MAX_LINE_WIDTH - 1);
             }
             'D' => {
                 // Cursor back
@@ -348,14 +348,14 @@ impl Perform for TerminalState {
             'G' => {
                 // Cursor horizontal absolute
                 let col = get_param(0, 1).saturating_sub(1) as usize;
-                self.cursor_col = col.min(self.cols - 1);
+                self.cursor_col = col.min(MAX_LINE_WIDTH - 1);
             }
             'H' | 'f' => {
                 // Cursor position
                 let row = get_param(0, 1).saturating_sub(1) as usize;
                 let col = get_param(1, 1).saturating_sub(1) as usize;
                 self.cursor_row = row;
-                self.cursor_col = col.min(self.cols - 1);
+                self.cursor_col = col.min(MAX_LINE_WIDTH - 1);
                 self.ensure_row(self.cursor_row);
             }
             'J' => {

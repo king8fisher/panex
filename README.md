@@ -36,6 +36,10 @@ panex "npm run api" "npm run web" "npm run mobile"
 
 # With custom names
 panex -n api,web,mobile "npm run api" "npm run web" "npm run mobile"
+
+# Full key passthrough for TUI apps (append ! to name)
+# Esc and Shift-Tab forwarded to process, click left panel to exit
+panex "tui" "npm run dev" -n "tui!,server"
 ```
 
 ### Keyboard Shortcuts
@@ -45,6 +49,7 @@ panex -n api,web,mobile "npm run api" "npm run web" "npm run mobile"
 | `↑/↓`       | Navigate process list             |
 | `Enter/Tab` | Focus process (interactive mode)  |
 | `Esc`       | Exit focus mode                   |
+| `Shift-Tab` | Exit focus mode (unless disabled) |
 | `r`         | Restart selected process          |
 | `x`         | Kill selected process             |
 | `A`         | Restart all processes             |
@@ -54,6 +59,15 @@ panex -n api,web,mobile "npm run api" "npm run web" "npm run mobile"
 | `PgUp/PgDn` | Scroll output                     |
 | `?`         | Show help                         |
 | `q`         | Quit panex                        |
+
+### Mouse
+
+| Click        | Action                  |
+| ------------ | ----------------------- |
+| Left panel   | Exit focus, select item |
+| Right panel  | Enter focus mode        |
+| Status bar   | Exit focus mode         |
+| Scroll wheel | Scroll output           |
 
 ## Why panex?
 

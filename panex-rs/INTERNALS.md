@@ -281,14 +281,118 @@ Keybindings:
 
 ## Mouse Handling
 
-Click detection for process selection:
+### Click Zones
+
+| Zone                    | Action                                  |
+| ----------------------- | --------------------------------------- |
+| Left panel (col < 20)   | Exit focus, select process if valid row |
+| Right panel (col ≥ 21)  | Enter focus mode                        |
+| Status bar (bottom row) | Exit focus mode                         |
+
 ```rust
-if event.column < 20 {  // Within process list
-    let index = event.row as usize;  // Direct mapping, no border offset
-    if index < process_count {
-        selected_index = index;
+if is_status_bar {
+    app.exit_focus();
+} else if event.column < 20 {
+    // Select process if valid row
+    if index < pm.process_count() {
+        app.selected_index = index;
     }
+    app.exit_focus();
+} else if event.column >= 21 {
+    app.enter_focus();
 }
 ```
 
-Scroll wheel works on output panel regardless of click position.
+### Scroll Wheel
+
+Works on output panel regardless of click position or mode.
+
+## Render-Time Width Truncation
+
+### The Problem
+
+When the terminal is resized narrower after a process has output content, the stored lines may be wider than the current display. Programs like `fastfetch` use cursor positioning to place content at specific columns. If lines auto-wrapped during storage, content would be corrupted (text from different columns interleaved).
+
+### Solution
+
+Lines are stored at their full width (up to `MAX_LINE_WIDTH = 2000`), and truncation happens only at render time:
+
+```rust
+// In output_panel.rs
+let spans: Vec<Span> = line
+    .cells
+    .iter()
+    .take(inner_width)  // Truncate at render time
+    .map(|cell| Span::styled(cell.c.to_string(), cell.style))
+    .collect();
+```
+
+Key changes in `buffer.rs`:
+1. Removed auto-wrap in `put_char()` - lines can grow as long as needed
+2. Cursor positioning clamps to `MAX_LINE_WIDTH` instead of `self.cols`
+
+### Benefits
+
+- **Resize wider**: Hidden content reappears (it was always stored, just not displayed)
+- **Resize narrower**: Content clips on right edge but isn't corrupted
+- **No interleaving**: Cursor-positioned content stays on correct lines
+
+### Memory Protection
+
+`MAX_LINE_WIDTH = 2000` prevents runaway memory allocation from malicious or buggy escape sequences while allowing normal terminal widths.
+
+## Per-Process Key Passthrough
+
+### Use Case
+
+Many TUI apps (vim, helix) use Esc and Shift-Tab for their own keybindings. The `!` suffix on process names enables full key passthrough - both Esc and Shift-Tab are forwarded to the process instead of exiting focus mode.
+
+### Syntax
+
+Append `!` to the process name:
+
+```bash
+panex "helix" "npm run dev" -n "helix!,server"
+```
+
+Here, "helix" receives all keys including Esc and Shift-Tab. Exit focus by clicking the left panel.
+
+### Key Forwarding
+
+When `!` is set:
+- `Esc` → forwarded as `\x1b`
+- `Shift-Tab` → forwarded as `\x1b[Z` (CSI Z)
+- **Mouse click on left panel** → only way to exit focus mode
+
+### Implementation
+
+In `config.rs`:
+```rust
+let (name, proc_no_shift_tab) = if raw_name.ends_with('!') {
+    (raw_name.trim_end_matches('!').to_string(), true)
+} else {
+    (raw_name, false)
+};
+```
+
+In `input/handler.rs`:
+```rust
+KeyCode::Esc if !no_shift_tab => {
+    app.exit_focus();
+    return;
+}
+KeyCode::BackTab if !no_shift_tab => {
+    app.exit_focus();
+    return;
+}
+```
+
+In `input/mouse.rs`, clicking left panel always exits focus:
+```rust
+if event.column < 20 {
+    app.selected_index = index;
+    app.exit_focus();
+}
+```
+
+The status bar shows "Click LPanel:exit" when key passthrough is enabled.

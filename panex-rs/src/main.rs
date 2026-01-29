@@ -136,7 +136,10 @@ async fn run_app(
             f.render_widget(output_panel, content_chunks[2]);
 
             // Status bar
-            let status_bar = StatusBar::new(app.mode, app.no_shift_tab);
+            let proc_no_shift_tab = selected_process
+                .map(|p| p.config.no_shift_tab)
+                .unwrap_or(false);
+            let status_bar = StatusBar::new(app.mode, app.no_shift_tab, proc_no_shift_tab);
             f.render_widget(status_bar, main_chunks[1]);
 
             // Help popup
