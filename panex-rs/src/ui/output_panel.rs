@@ -27,7 +27,8 @@ impl Widget for OutputPanel<'_> {
                 let inner_height = area.height as usize;
                 let inner_width = area.width as usize;
 
-                let total_lines = buffer.len();
+                // Use content_line_count to exclude trailing empty lines
+                let total_lines = process.buffer.content_line_count();
                 let start = process.scroll_offset.min(total_lines.saturating_sub(1));
                 let end = (start + inner_height).min(total_lines);
 
@@ -60,7 +61,8 @@ pub fn scroll_up(process: &mut ManagedProcess, amount: usize) {
 }
 
 pub fn scroll_down(process: &mut ManagedProcess, amount: usize, visible_height: usize) {
-    let max_scroll = process.buffer.line_count().saturating_sub(visible_height);
+    // Use content_line_count to exclude trailing empty lines (cursor position after newline)
+    let max_scroll = process.buffer.content_line_count().saturating_sub(visible_height);
     process.scroll_offset = (process.scroll_offset + amount).min(max_scroll);
 
     // Re-enable auto scroll if at bottom
@@ -74,6 +76,8 @@ pub fn scroll_to_top(process: &mut ManagedProcess) {
     process.auto_scroll = false;
 }
 
-pub fn scroll_to_bottom(process: &mut ManagedProcess) {
+pub fn scroll_to_bottom(process: &mut ManagedProcess, visible_height: usize) {
+    let max_scroll = process.buffer.content_line_count().saturating_sub(visible_height);
+    process.scroll_offset = max_scroll;
     process.auto_scroll = true;
 }

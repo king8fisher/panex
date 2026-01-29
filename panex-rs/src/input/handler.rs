@@ -43,8 +43,8 @@ fn handle_normal_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
         KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => app.quit(),
 
         // Navigation
-        KeyCode::Up | KeyCode::Char('k') => app.select_prev(count),
-        KeyCode::Down | KeyCode::Char('j') => app.select_next(count),
+        KeyCode::Up => app.select_prev(count),
+        KeyCode::Down => app.select_next(count),
 
         // Focus
         KeyCode::Enter | KeyCode::Tab => app.enter_focus(),
@@ -68,16 +68,28 @@ fn handle_normal_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
 
         // Scrolling
         KeyCode::Char('g') => {
+            // Toggle pin (auto_scroll)
+            if let Some(name) = selected_name {
+                if let Some(process) = pm.get_process_mut(&name) {
+                    if process.auto_scroll {
+                        process.auto_scroll = false;
+                    } else {
+                        scroll_to_bottom(process, visible_height);
+                    }
+                }
+            }
+        }
+        KeyCode::Char('t') => {
             if let Some(name) = selected_name {
                 if let Some(process) = pm.get_process_mut(&name) {
                     scroll_to_top(process);
                 }
             }
         }
-        KeyCode::Char('G') => {
+        KeyCode::Char('b') => {
             if let Some(name) = selected_name {
                 if let Some(process) = pm.get_process_mut(&name) {
-                    scroll_to_bottom(process);
+                    scroll_to_bottom(process, visible_height);
                 }
             }
         }

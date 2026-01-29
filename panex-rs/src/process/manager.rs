@@ -189,11 +189,10 @@ impl ProcessManager {
             if process.auto_scroll {
                 let cursor_row = process.buffer.cursor_row();
                 let visible = self.rows as usize;
-                // Scroll to keep cursor visible
-                // Use > instead of >= to avoid flickering on TUI apps that
-                // momentarily wrap cursor to next line (pending-wrap state)
+                // Scroll to show content, not the empty line where cursor sits after newline
+                // Use > instead of >= to avoid flickering on TUI apps
                 if cursor_row > visible {
-                    process.scroll_offset = cursor_row.saturating_sub(visible - 1);
+                    process.scroll_offset = cursor_row.saturating_sub(visible);
                 } else {
                     process.scroll_offset = 0;
                 }

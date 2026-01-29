@@ -24,7 +24,7 @@ impl Widget for StatusBar {
             InputMode::Normal => (
                 " NORMAL ",
                 Color::Blue,
-                "↑↓/jk:nav  Enter/Tab:focus  r:restart  A:all  x:kill  ?:help  q:quit",
+                "↑↓:nav  Enter/Tab:focus  r:restart  A:all  x:kill  g:pin  t/b:top/bot  ?:help  q:quit",
             ),
             InputMode::Focus => {
                 let exit_key = if self.no_shift_tab {

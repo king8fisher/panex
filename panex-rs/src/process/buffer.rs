@@ -62,8 +62,14 @@ impl TerminalBuffer {
         }
     }
 
-    pub fn line_count(&self) -> usize {
-        self.state.lines.len()
+    /// Returns line count excluding trailing empty lines.
+    /// Avoids showing empty cursor line after newline.
+    pub fn content_line_count(&self) -> usize {
+        let mut count = self.state.lines.len();
+        while count > 0 && self.state.lines[count - 1].cells.is_empty() {
+            count -= 1;
+        }
+        count.max(1)
     }
 
     pub fn get_all_lines(&self) -> &VecDeque<Line> {

@@ -219,14 +219,15 @@ When `cursor_row == visible` (e.g., 23 == 23):
 Fixed logic:
 ```rust
 if cursor_row > visible {  // Changed from >=
-    scroll_offset = cursor_row - (visible - 1);
+    scroll_offset = cursor_row - visible;  // Show content, not empty cursor line
 }
 ```
 
-When `cursor_row == visible`:
-- Condition is false, no scroll
-- Row 0 stays visible
-- **Result**: Stable display for TUI apps
+Two fixes:
+1. `>` instead of `>=`: When cursor is exactly at `visible`, don't scroll (transient wrap state)
+2. `cursor_row - visible` instead of `cursor_row - visible + 1`: Don't show the empty line where cursor sits after newline
+
+**Result**: Stable display for TUI apps + no wasted viewport line on empty cursor row
 
 ### Why This Works
 
@@ -235,9 +236,31 @@ For TUI apps:
 - Cursor at row `visible` is transient (wrap state, no actual content)
 - Not scrolling keeps their intended viewport intact
 
-For scrollback (cat, long output):
-- Real content on row `visible+1` triggers scroll
-- Still follows cursor when there's actual content below viewport
+For scrollback (cat, date loop, long output):
+- After outputting "line\n", cursor is on empty row N+1
+- Old formula showed row N+1 (empty), wasting one line of viewport
+- New formula: `scroll_offset = cursor_row - visible` keeps cursor just below viewport
+- Shows rows [scroll_offset, scroll_offset + visible - 1], all with actual content
+
+### Content Line Count
+
+The buffer tracks all lines including empty ones created by cursor movement. For scroll calculations, we use `content_line_count()` which excludes trailing empty lines:
+
+```rust
+pub fn content_line_count(&self) -> usize {
+    let mut count = self.lines.len();
+    while count > 0 && self.lines[count - 1].cells.is_empty() {
+        count -= 1;
+    }
+    count.max(1)
+}
+```
+
+Used in:
+- `scroll_down()`: max_scroll calculation
+- `OutputPanel::render()`: total_lines for display bounds
+
+This ensures manual scrolling and rendering never show trailing empty lines.
 
 ### Pin Feature
 
@@ -245,7 +268,7 @@ Users can disable auto-scroll ("pin") by:
 - Scrolling up manually
 - Pressing `g` to go to top
 
-Pin indicator (📌) appears in process list when pinned. Re-enables when:
+Pin indicator (⇅) appears in process list when pinned. Re-enables when:
 - User scrolls to bottom
 - Presses `G` to go to bottom
 

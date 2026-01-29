@@ -37,7 +37,7 @@ impl Widget for ProcessList<'_> {
                 let process = self.manager.get_process(name).unwrap();
                 let icon = process.status.icon();
                 let status_color = process.status.color();
-                let pin = if !process.auto_scroll { "📌" } else { "" };
+                let pin = if !process.auto_scroll { "⇅" } else { " " };
 
                 let is_selected = i == self.selected;
                 let bg_color = if is_selected {
@@ -64,11 +64,20 @@ impl Widget for ProcessList<'_> {
                 let name_len = display_name.chars().count();
                 let padding = width.saturating_sub(icon_width + name_len + pin_width);
 
+                let pin_style = if !process.auto_scroll {
+                    Style::default().fg(Color::White).bg(Color::Red)
+                } else {
+                    style
+                };
+
                 let line = Line::from(vec![
-                    Span::styled(format!("{} ", icon), Style::default().fg(status_color).bg(bg_color)),
+                    Span::styled(
+                        format!("{} ", icon),
+                        Style::default().fg(status_color).bg(bg_color),
+                    ),
                     Span::styled(display_name, bold_style),
                     Span::styled(" ".repeat(padding), style),
-                    Span::styled(pin, style),
+                    Span::styled(pin, pin_style),
                 ]);
 
                 ListItem::new(line)
