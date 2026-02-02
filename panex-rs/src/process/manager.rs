@@ -283,9 +283,47 @@ impl ProcessManager {
         self.process_order.len()
     }
 
-    pub fn shutdown(&mut self) {
+    /// Begin graceful shutdown - send SIGTERM to all running processes
+    pub fn begin_shutdown(&mut self) {
         for name in self.process_order.clone() {
-            let _ = self.kill_process(&name);
+            if let Some(process) = self.processes.get_mut(&name) {
+                if matches!(process.status, ProcessStatus::Running) {
+                    process.shutdown.store(true, Ordering::SeqCst);
+                    if let Some(ref pty) = process.pty {
+                        let _ = pty.terminate();
+                    }
+                }
+            }
+        }
+    }
+
+    /// Count processes that are not running
+    pub fn stopped_count(&self) -> usize {
+        self.processes
+            .values()
+            .filter(|p| !matches!(p.status, ProcessStatus::Running))
+            .count()
+    }
+
+    /// Check if any process is still running
+    pub fn any_running(&self) -> bool {
+        self.processes
+            .values()
+            .any(|p| matches!(p.status, ProcessStatus::Running))
+    }
+
+    /// Force kill all remaining processes
+    pub fn finish_shutdown(&mut self) {
+        for name in self.process_order.clone() {
+            if let Some(process) = self.processes.get_mut(&name) {
+                if matches!(process.status, ProcessStatus::Running) {
+                    if let Some(ref pty) = process.pty {
+                        let _ = pty.force_kill();
+                    }
+                    process.pty = None;
+                    process.status = ProcessStatus::Stopped;
+                }
+            }
         }
     }
 }

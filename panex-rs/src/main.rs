@@ -169,13 +169,34 @@ async fn run_app(
 
             // Shutdown popup
             if app.shutting_down {
-                f.render_widget(ShutdownPopup::new(), size);
+                let stopped = pm.stopped_count();
+                let total = pm.process_count();
+                let remaining_ms = app.shutdown_start
+                    .map(|start| {
+                        let elapsed = start.elapsed().as_millis() as u64;
+                        config.timeout.saturating_sub(elapsed)
+                    })
+                    .unwrap_or(config.timeout);
+                f.render_widget(ShutdownPopup::new(stopped, total, remaining_ms), size);
             }
         })?;
 
+        // Handle shutdown progression
         if app.shutting_down {
-            pm.shutdown();
-            app.should_quit = true;
+            if let Some(start) = app.shutdown_start {
+                let elapsed = start.elapsed().as_millis() as u64;
+                if !pm.any_running() {
+                    // All processes stopped
+                    app.should_quit = true;
+                } else if elapsed >= config.timeout {
+                    // Timeout exceeded - force kill remaining
+                    pm.finish_shutdown();
+                    app.should_quit = true;
+                } else if elapsed < 50 {
+                    // Early phase - send SIGTERM (idempotent)
+                    pm.begin_shutdown();
+                }
+            }
         }
 
         if app.should_quit {

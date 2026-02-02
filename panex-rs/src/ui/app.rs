@@ -2,6 +2,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
 };
+use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
@@ -41,6 +42,7 @@ pub struct App {
     pub show_help: bool,
     pub should_quit: bool,
     pub shutting_down: bool,
+    pub shutdown_start: Option<Instant>,
     pub no_shift_tab: bool,
 }
 
@@ -52,6 +54,7 @@ impl App {
             show_help: false,
             should_quit: false,
             shutting_down: false,
+            shutdown_start: None,
             no_shift_tab,
         }
     }
@@ -81,6 +84,9 @@ impl App {
     }
 
     pub fn quit(&mut self) {
-        self.shutting_down = true;
+        if !self.shutting_down {
+            self.shutting_down = true;
+            self.shutdown_start = Some(Instant::now());
+        }
     }
 }

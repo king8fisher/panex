@@ -48,6 +48,9 @@ panex "npm run build" -n "build:w"
 
 # Combine suffixes (either order works)
 panex "helix" "npm run build" -n "helix!:w,build:w"
+
+# Custom shutdown timeout (default: 500ms)
+panex -t 1000 "npm run dev"  # 1 second graceful shutdown
 ```
 
 ### Keyboard Shortcuts

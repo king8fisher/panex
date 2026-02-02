@@ -123,6 +123,37 @@ impl PtyHandle {
         Ok(())
     }
 
+    /// Send SIGTERM without waiting - for progressive shutdown
+    pub fn terminate(&self) -> Result<()> {
+        let child = self.child.lock().map_err(|_| anyhow!("Lock poisoned"))?;
+
+        #[cfg(unix)]
+        if let Some(pid) = child.process_id() {
+            unsafe {
+                libc::kill(-(pid as i32), libc::SIGTERM);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Force kill with SIGKILL
+    pub fn force_kill(&self) -> Result<()> {
+        let mut child = self.child.lock().map_err(|_| anyhow!("Lock poisoned"))?;
+
+        #[cfg(unix)]
+        if let Some(pid) = child.process_id() {
+            unsafe {
+                libc::kill(-(pid as i32), libc::SIGKILL);
+            }
+        }
+
+        let _ = child.kill();
+        let _ = child.try_wait();
+
+        Ok(())
+    }
+
     pub fn get_reader(&self) -> Arc<Mutex<Box<dyn Read + Send>>> {
         Arc::clone(&self.reader)
     }

@@ -128,18 +128,24 @@ impl Widget for HelpPopup {
     }
 }
 
-pub struct ShutdownPopup;
+pub struct ShutdownPopup {
+    stopped: usize,
+    total: usize,
+    remaining_ms: u64,
+}
 
 impl ShutdownPopup {
-    pub fn new() -> Self {
-        Self
+    pub fn new(stopped: usize, total: usize, remaining_ms: u64) -> Self {
+        Self { stopped, total, remaining_ms }
     }
 }
 
 impl Widget for ShutdownPopup {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let popup_width = 18;
-        let popup_height = 5;
+        let status = format!("{}/{} | {}ms", self.stopped, self.total, self.remaining_ms);
+        let header = "Sending SIGTERM...";
+        let popup_width = (header.len() + 4).max(status.len() + 6) as u16;
+        let popup_height = 6;
         let x = area.x + (area.width.saturating_sub(popup_width)) / 2;
         let y = area.y + (area.height.saturating_sub(popup_height)) / 2;
         let popup_area = Rect::new(x, y, popup_width, popup_height);
@@ -150,7 +156,12 @@ impl Widget for ShutdownPopup {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Yellow));
 
-        Paragraph::new("\n  Quitting...  ")
+        let text = vec![
+            Line::from(""),
+            Line::from(Span::styled(format!(" {} ", header), Style::default().fg(Color::Yellow))),
+            Line::from(format!("  {}  ", status)),
+        ];
+        Paragraph::new(text)
             .block(block)
             .render(popup_area, buf);
     }

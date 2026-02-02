@@ -47,4 +47,5 @@ cargo run -- \
   "mise x cowsay -- cowsay 'Hello from panex!'" \
   "mise build-fire && ../scripts/fire hash" \
   -n fastfetch,fastfetch:w,bottom,lazygit,yazi,glow,gitui,gum-spinner,cowsay,fire
+  -t 5000
 """
