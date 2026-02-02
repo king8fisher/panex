@@ -8,3 +8,6 @@ Golden file testing: render terminal buffer to string, compare against snapshots
 
 ## Resource Prioritization
 Distribute resources evenly across running processes.
+
+## Shutdown Progress
+Show which processes are being terminated during shutdown (e.g., progress bar or list with checkmarks).

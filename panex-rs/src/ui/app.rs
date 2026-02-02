@@ -40,6 +40,7 @@ pub struct App {
     pub mode: InputMode,
     pub show_help: bool,
     pub should_quit: bool,
+    pub shutting_down: bool,
     pub no_shift_tab: bool,
 }
 
@@ -50,6 +51,7 @@ impl App {
             mode: InputMode::Browse,
             show_help: false,
             should_quit: false,
+            shutting_down: false,
             no_shift_tab,
         }
     }
@@ -79,6 +81,6 @@ impl App {
     }
 
     pub fn quit(&mut self) {
-        self.should_quit = true;
+        self.shutting_down = true;
     }
 }

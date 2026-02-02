@@ -26,7 +26,7 @@ use tokio::sync::mpsc;
 
 const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
 use ui::{
-    help_popup::HelpPopup,
+    help_popup::{HelpPopup, ShutdownPopup},
     output_panel::OutputPanel,
     process_list::ProcessList,
     status_bar::StatusBar,
@@ -49,6 +49,10 @@ struct Cli {
     /// Disable Shift-Tab to exit focus mode
     #[arg(long)]
     no_shift_tab: bool,
+
+    /// Graceful shutdown timeout in ms before force kill (default: 500)
+    #[arg(short = 't', long, default_value = "500")]
+    timeout: u64,
 }
 
 #[tokio::main]
@@ -60,7 +64,7 @@ async fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    let config = PanexConfig::from_args(cli.commands, cli.names, cli.no_shift_tab);
+    let config = PanexConfig::from_args(cli.commands, cli.names, cli.no_shift_tab, cli.timeout);
 
     run(config).await
 }
@@ -107,7 +111,7 @@ async fn run_app(
     // Output panel width = total - process list (20) - delimiter (1)
     let output_cols = size.width.saturating_sub(21);
     let output_rows = size.height.saturating_sub(1); // -1 for status bar
-    let mut pm = ProcessManager::new(event_tx.clone(), output_cols, output_rows);
+    let mut pm = ProcessManager::new(event_tx.clone(), output_cols, output_rows, config.timeout);
 
     // Add processes
     for proc_config in &config.processes {
@@ -162,12 +166,19 @@ async fn run_app(
             if app.show_help {
                 f.render_widget(HelpPopup::new(), size);
             }
+
+            // Shutdown popup
+            if app.shutting_down {
+                f.render_widget(ShutdownPopup::new(), size);
+            }
         })?;
 
-        if app.should_quit {
+        if app.shutting_down {
             pm.shutdown();
-            // Wait for reader threads to notice shutdown and stop
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            app.should_quit = true;
+        }
+
+        if app.should_quit {
             break;
         }
 
@@ -193,8 +204,19 @@ async fn run_app(
         let visible_height = term_size.height.saturating_sub(1) as usize; // -1 for status bar
         let viewport_width = term_size.width.saturating_sub(21) as usize; // -20 for process list, -1 for delimiter
 
-        // Handle events
+        // Handle events - biased ensures terminal events (quit) are checked first
         tokio::select! {
+            biased;
+
+            Some(Ok(event)) = event_stream.next() => {
+                if let Event::Key(_) | Event::Mouse(_) | Event::Resize(_, _) = event {
+                    if let Some((cols, rows)) = input::handle_event(event, &mut app, &mut pm, visible_height, viewport_width) {
+                        // Schedule debounced resize
+                        pending_resize = Some((cols, rows));
+                        resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
+                    }
+                }
+            }
             Some(event) = event_rx.recv() => {
                 match event {
                     AppEvent::ProcessOutput(name, gen, data) => {
@@ -219,15 +241,8 @@ async fn run_app(
                     AppEvent::Tick => {}
                 }
             }
-            Some(Ok(event)) = event_stream.next() => {
-                if let Event::Key(_) | Event::Mouse(_) | Event::Resize(_, _) = event {
-                    if let Some((cols, rows)) = input::handle_event(event, &mut app, &mut pm, visible_height, viewport_width) {
-                        // Schedule debounced resize
-                        pending_resize = Some((cols, rows));
-                        resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
-                    }
-                }
-            }
+            // Periodic timeout to ensure quit check runs even when blocked
+            _ = tokio::time::sleep(Duration::from_millis(100)) => {}
         }
     }
 

@@ -41,10 +41,11 @@ pub struct ProcessConfig {
 pub struct PanexConfig {
     pub processes: Vec<ProcessConfig>,
     pub no_shift_tab: bool,
+    pub timeout: u64,
 }
 
 impl PanexConfig {
-    pub fn from_args(commands: Vec<String>, names: Option<String>, no_shift_tab: bool) -> Self {
+    pub fn from_args(commands: Vec<String>, names: Option<String>, no_shift_tab: bool, timeout: u64) -> Self {
         let name_list: Vec<String> = names
             .map(|n| n.split(',').map(|s| s.trim().to_string()).collect())
             .unwrap_or_default();
@@ -88,6 +89,7 @@ impl PanexConfig {
         PanexConfig {
             processes,
             no_shift_tab,
+            timeout,
         }
     }
 }

@@ -128,6 +128,34 @@ impl Widget for HelpPopup {
     }
 }
 
+pub struct ShutdownPopup;
+
+impl ShutdownPopup {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Widget for ShutdownPopup {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let popup_width = 18;
+        let popup_height = 5;
+        let x = area.x + (area.width.saturating_sub(popup_width)) / 2;
+        let y = area.y + (area.height.saturating_sub(popup_height)) / 2;
+        let popup_area = Rect::new(x, y, popup_width, popup_height);
+
+        Clear.render(popup_area, buf);
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow));
+
+        Paragraph::new("\n  Quitting...  ")
+            .block(block)
+            .render(popup_area, buf);
+    }
+}
+
 fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::vertical([
         Constraint::Percentage((100 - percent_y) / 2),

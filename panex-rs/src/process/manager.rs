@@ -43,16 +43,18 @@ pub struct ProcessManager {
     event_tx: mpsc::UnboundedSender<AppEvent>,
     cols: u16,
     rows: u16,
+    timeout: u64,
 }
 
 impl ProcessManager {
-    pub fn new(event_tx: mpsc::UnboundedSender<AppEvent>, cols: u16, rows: u16) -> Self {
+    pub fn new(event_tx: mpsc::UnboundedSender<AppEvent>, cols: u16, rows: u16, timeout: u64) -> Self {
         Self {
             processes: HashMap::new(),
             process_order: Vec::new(),
             event_tx,
             cols,
             rows,
+            timeout,
         }
     }
 
@@ -158,7 +160,7 @@ impl ProcessManager {
         if let Some(process) = self.processes.get_mut(name) {
             process.shutdown.store(true, Ordering::SeqCst);
             if let Some(ref pty) = process.pty {
-                let _ = pty.kill();
+                let _ = pty.kill(self.timeout);
             }
             process.pty = None;
             process.status = ProcessStatus::Stopped;

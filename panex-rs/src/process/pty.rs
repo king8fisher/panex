@@ -88,18 +88,26 @@ impl PtyHandle {
         Ok(())
     }
 
-    pub fn kill(&self) -> Result<()> {
+    pub fn kill(&self, timeout_ms: u64) -> Result<()> {
         let mut child = self.child.lock().map_err(|_| anyhow!("Lock poisoned"))?;
 
         // Try to kill the process group first (kills children too)
         #[cfg(unix)]
         if let Some(pid) = child.process_id() {
-            // Kill entire process group with SIGTERM
+            // Send SIGTERM for graceful shutdown
             unsafe {
                 libc::kill(-(pid as i32), libc::SIGTERM);
             }
-            // Give processes a moment to terminate gracefully
-            std::thread::sleep(std::time::Duration::from_millis(50));
+
+            // Poll every 10ms until timeout
+            let iterations = (timeout_ms / 10).max(1);
+            for _ in 0..iterations {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+                if let Ok(Some(_)) = child.try_wait() {
+                    return Ok(());
+                }
+            }
+
             // Force kill if still running
             unsafe {
                 libc::kill(-(pid as i32), libc::SIGKILL);
@@ -109,8 +117,8 @@ impl PtyHandle {
         // Also call the standard kill as fallback
         let _ = child.kill();
 
-        // Wait for the child to avoid zombies
-        let _ = child.wait();
+        // Non-blocking wait to reap zombie
+        let _ = child.try_wait();
 
         Ok(())
     }
