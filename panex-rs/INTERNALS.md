@@ -73,6 +73,15 @@ Query:    \x1b[5n
 Response: \x1b[0n  ("OK")
 ```
 
+#### Window Size Query (XTWINOPS)
+
+```
+Query:    \x1b[18t
+Response: \x1b[8;{rows};{cols}t
+```
+
+TUI apps like `lazygit`, `gitui`, and others query terminal size via this escape sequence. Without a response, they fall back to 80x24 defaults. This is separate from SIGWINCH which handles resize events - this query is for initial size detection.
+
 #### Implementation
 
 Since `TerminalState` (which implements `vte::Perform`) doesn't have direct PTY access, we use a response queue:
@@ -179,7 +188,7 @@ pm.resize(cols - 21, rows - 1);
 
 ### Resize Debouncing
 
-Terminal resize events flood in during window dragging. Without debouncing, each event triggers PTY resize which causes TUI apps to redraw, creating an animation effect.
+Terminal resize events flood in during window dragging. Without debouncing, each event triggers PTY resize which causes TUI apps to redraw. For CPU-intensive processes this can cause lag.
 
 Solution: Store pending resize dimensions, only apply after 50ms of no new resize events:
 
@@ -188,12 +197,18 @@ let mut pending_resize: Option<(u16, u16)> = None;
 let mut resize_deadline: Option<Instant> = None;
 const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
 
-tokio::select! {
-    // ... other branches ...
-    _ = tokio::time::sleep(timeout), if resize_deadline.is_some() => {
-        if let Some((cols, rows)) = pending_resize.take() {
-            pm.resize(cols.saturating_sub(21), rows.saturating_sub(1));
-        }
+// On size change detection
+if last_size != Some(current_size) {
+    pending_resize = Some(current_size);
+    resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
+    last_size = Some(current_size);
+}
+
+// Apply after deadline passes
+if let (Some((cols, rows)), Some(deadline)) = (pending_resize, resize_deadline) {
+    if Instant::now() >= deadline {
+        pm.resize(cols.saturating_sub(21), rows.saturating_sub(1));
+        pending_resize = None;
         resize_deadline = None;
     }
 }
@@ -285,6 +300,99 @@ Used in:
 - `OutputPanel::render()`: total_lines for display bounds
 
 This ensures manual scrolling and rendering never show trailing empty lines.
+
+### Wrap Mode Auto-Scroll
+
+When line wrapping is enabled, auto-scroll must use display line count (not buffer row count) to position correctly.
+
+**The Problem**
+
+Without proper calculation, auto-scroll uses buffer row as scroll offset:
+```rust
+// WRONG for wrap mode
+process.scroll_offset = cursor_row;  // Buffer row 5
+// But display might have 15 wrapped lines - misses last ~10 lines
+```
+
+**The Fix**
+
+Calculate total display lines (excluding trailing empty) and scroll to show bottom:
+```rust
+let content_count = /* exclude trailing empty buffer lines */;
+let total_display_lines = if process.wrap_enabled && cols > 0 {
+    lines.iter().take(content_count).map(|line| {
+        if line.cells.is_empty() { 1 }
+        else { (line.cells.len() + cols - 1) / cols }
+    }).sum::<usize>().max(1)
+} else {
+    content_count
+};
+if total_display_lines > visible {
+    process.scroll_offset = total_display_lines - visible;
+}
+```
+
+This matches the logic in `display_line_count()` used by manual scroll functions.
+
+### Trailing Empty Line Exclusion
+
+Both wrap and no-wrap modes must exclude trailing empty buffer lines for consistent behavior:
+
+**No-wrap mode**: Uses `content_line_count()` which already excludes trailing empty lines.
+
+**Wrap mode**: Must also exclude trailing empty lines via `content_buffer_line_count()`:
+```rust
+fn content_buffer_line_count(buffer: &VecDeque<Line>) -> usize {
+    let mut count = buffer.len();
+    while count > 0 && buffer[count - 1].cells.is_empty() {
+        count -= 1;
+    }
+    count.max(1)
+}
+```
+
+Used in:
+- `display_line_count()` for wrap mode scroll calculations
+- `OutputPanel::render()` when building wrapped display lines
+
+Without this, wrap mode would show an extra empty line at bottom that no-wrap mode doesn't show.
+
+### Auto-Scroll vs Manual Scroll Consistency
+
+**The Bug**
+
+Programs that output content ending with `\n` (like `glow`) would show an empty line at bottom during auto-scroll, but pressing `g` (which calls `scroll_to_bottom`) would make it disappear.
+
+**Root Cause**
+
+Auto-scroll originally used **cursor position** to calculate scroll offset:
+```rust
+// WRONG: cursor-based counting
+let scroll_pos = cursor_row;  // Cursor on empty line after "content\n"
+process.scroll_offset = scroll_pos - visible;
+```
+
+But render and manual scroll used **content-based counting** (excluding trailing empty lines):
+```rust
+// Render uses content_line_count (excludes trailing empty)
+let total_lines = content_line_count();
+```
+
+When cursor sits on trailing empty line (row N after N-1 content rows):
+- Auto-scroll: `scroll_offset = N - visible` (includes empty line)
+- Render: only shows N-1 content lines
+- Result: scroll_offset is 1 too high, showing empty line at bottom
+
+**The Fix**
+
+Auto-scroll now uses content-based counting, matching render and manual scroll:
+```rust
+let content_count = /* exclude trailing empty lines */;
+let total_display_lines = /* count display lines for content only */;
+process.scroll_offset = total_display_lines.saturating_sub(visible);
+```
+
+All three paths (auto-scroll, manual scroll, render) now use identical line counting logic.
 
 ### Pin Feature
 
@@ -495,6 +603,52 @@ loop {
 }
 ```
 
+## Process Group Termination
+
+### The Problem
+
+When killing a process via `child.kill()`, only the immediate shell process (`/bin/sh -c command`) is terminated. Child processes spawned by that shell continue running as orphans.
+
+Example: `panex "npm run dev"` spawns:
+```
+sh -c "npm run dev"    ← killed
+  └── node server.js   ← continues running!
+```
+
+### Solution
+
+Kill the entire process group using negative PID:
+
+```rust
+pub fn kill(&self) -> Result<()> {
+    #[cfg(unix)]
+    if let Some(pid) = child.process_id() {
+        // Kill entire process group with SIGTERM
+        unsafe { libc::kill(-(pid as i32), libc::SIGTERM); }
+
+        // Give processes time to terminate gracefully
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Force kill if still running
+        unsafe { libc::kill(-(pid as i32), libc::SIGKILL); }
+    }
+
+    let _ = child.kill();  // Fallback
+    let _ = child.wait();  // Reap zombie
+    Ok(())
+}
+```
+
+### Why This Works
+
+Processes spawned in a PTY get a new session via `setsid()`. The shell becomes session leader and process group leader, so `pid == pgid`. Killing with `-pid` sends the signal to all processes in that group.
+
+### Caveats
+
+- Requires `libc` crate (Unix only)
+- Children that create their own process groups (via `setpgid`) won't be killed
+- The 50ms grace period balances responsiveness vs graceful shutdown
+
 ## Clean Shutdown
 
 ### The Problem
@@ -536,3 +690,53 @@ io::stdout().flush()?;
 ```
 
 Key insight: `DisableMouseCapture` must happen before draining events, otherwise terminal keeps sending mouse sequences while we try to drain them.
+
+## Process Restart Race Condition
+
+### The Problem
+
+When restarting a process, it would sometimes appear "paused" and require a second restart. Root cause: race condition between old and new reader threads.
+
+Sequence:
+1. `restart_process` kills old process, starts new one
+2. Old reader thread (still running) eventually gets EOF
+3. Old thread sends `ProcessExited(name, ...)`
+4. `handle_exit` receives event, sets `pty = None` on the NEW process
+5. New process appears dead/paused
+
+The issue: events are keyed by process name, but after restart the same name refers to a different process instance.
+
+### Solution: Generation Counter
+
+Each process has a `generation: u64` that increments on every start. Events include the generation they originated from:
+
+```rust
+pub enum AppEvent {
+    ProcessOutput(String, Generation, Vec<u8>),
+    ProcessExited(String, Generation, Option<i32>),
+    ProcessError(String, Generation, String),
+    // ...
+}
+```
+
+Handlers check generation before acting:
+
+```rust
+pub fn handle_exit(&mut self, name: &str, gen: Generation, code: Option<i32>) {
+    if let Some(process) = self.processes.get_mut(name) {
+        // Ignore events from old process instances
+        if process.generation != gen {
+            return;
+        }
+        // ... handle exit
+    }
+}
+```
+
+This eliminates the race entirely - old events are silently dropped regardless of timing.
+
+### Benefits
+
+- Restart delay reduced from 100ms to 50ms (no longer timing-dependent)
+- `restart_all` can kill all processes first, then start all (faster)
+- No more "paused" processes after restart

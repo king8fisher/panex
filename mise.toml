@@ -1,6 +1,7 @@
 [tools]
 node = "22"
 rust = "latest"
+zig = "latest"
 
 [tasks.current-version]
 run = ["npm view panex version"]
@@ -26,8 +27,12 @@ echo "Done! Watch the release at: https://github.com/king8fisher/panex/actions"
 dir = "panex-rs"
 run = "cargo build --release"
 
+[tasks.build-fire]
+dir = "scripts"
+run = "zig build-exe fire.zig -O ReleaseFast"
+
 [tasks.dev]
-wait_for = ["build"]
+wait_for = ["build", "build-fire"]
 dir = "panex-rs"
 run = """
 cargo run -- \
@@ -40,10 +45,6 @@ cargo run -- \
   "mise x gitui -- gitui" \
   "mise x gum -- gum spin --spinner dot --title 'Loading...' -- sleep 100" \
   "mise x cowsay -- cowsay 'Hello from panex!'" \
-  "while true; do echo 'ping'; sleep 1; done" \
-  "while true; do date; sleep 1; done" \
-  "for i in {1..20}; do echo line $i; sleep 0.5; done" \
-  "while true; do echo -e '\\033[31mRed\\033[0m \\033[32mGreen\\033[0m \\033[34mBlue\\033[0m \\033[33mYellow\\033[0m'; sleep 1; done" \
-  "while true; do echo -e '\\033[1mBold\\033[0m \\033[4mUnderline\\033[0m \\033[1;32mBold Green\\033[0m'; sleep 1; done" \
-  -n fastfetch,fastfetch:w,bottom,lazygit,yazi,glow,gitui,gum,cowsay,ping,date,lines,colors,bold
+  "mise build-fire && ../scripts/fire hash" \
+  -n fastfetch,fastfetch:w,bottom,lazygit,yazi,glow,gitui,gum-spinner,cowsay,fire
 """

@@ -23,6 +23,8 @@ use ratatui::{
 use std::io::{self, Write};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
+
+const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
 use ui::{
     help_popup::HelpPopup,
     output_panel::OutputPanel,
@@ -117,11 +119,9 @@ async fn run_app(
 
     let mut app = App::new(config.no_shift_tab);
     let mut event_stream = EventStream::new();
-
-    // Resize debouncing: store pending size, apply after 50ms of no new resize events
+    let mut last_size: Option<(u16, u16)> = None;
     let mut pending_resize: Option<(u16, u16)> = None;
     let mut resize_deadline: Option<Instant> = None;
-    const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
 
     loop {
         // Draw
@@ -172,13 +172,26 @@ async fn run_app(
         }
 
         let term_size = terminal.size()?;
+        let current_size = (term_size.width, term_size.height);
+
+        // Detect size change and schedule debounced resize
+        if last_size != Some(current_size) {
+            pending_resize = Some(current_size);
+            resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
+            last_size = Some(current_size);
+        }
+
+        // Apply pending resize after debounce period
+        if let (Some((cols, rows)), Some(deadline)) = (pending_resize, resize_deadline) {
+            if Instant::now() >= deadline {
+                pm.resize(cols.saturating_sub(21), rows.saturating_sub(1));
+                pending_resize = None;
+                resize_deadline = None;
+            }
+        }
+
         let visible_height = term_size.height.saturating_sub(1) as usize; // -1 for status bar
         let viewport_width = term_size.width.saturating_sub(21) as usize; // -20 for process list, -1 for delimiter
-
-        // Calculate timeout for resize debouncing
-        let timeout = resize_deadline
-            .map(|d| d.saturating_duration_since(Instant::now()))
-            .unwrap_or(Duration::MAX);
 
         // Handle events
         tokio::select! {
@@ -198,6 +211,7 @@ async fn run_app(
                     }
                     AppEvent::Input(e) => {
                         if let Some((cols, rows)) = input::handle_event(e, &mut app, &mut pm, visible_height, viewport_width) {
+                            // Schedule debounced resize
                             pending_resize = Some((cols, rows));
                             resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
                         }
@@ -208,17 +222,11 @@ async fn run_app(
             Some(Ok(event)) = event_stream.next() => {
                 if let Event::Key(_) | Event::Mouse(_) | Event::Resize(_, _) = event {
                     if let Some((cols, rows)) = input::handle_event(event, &mut app, &mut pm, visible_height, viewport_width) {
+                        // Schedule debounced resize
                         pending_resize = Some((cols, rows));
                         resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
                     }
                 }
-            }
-            _ = tokio::time::sleep(timeout), if resize_deadline.is_some() => {
-                // Debounce period elapsed, apply resize
-                if let Some((cols, rows)) = pending_resize.take() {
-                    pm.resize(cols.saturating_sub(21), rows.saturating_sub(1));
-                }
-                resize_deadline = None;
             }
         }
     }

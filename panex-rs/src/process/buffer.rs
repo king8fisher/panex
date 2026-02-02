@@ -77,10 +77,6 @@ impl TerminalBuffer {
         &self.state.lines
     }
 
-    pub fn cursor_row(&self) -> usize {
-        self.state.cursor_row
-    }
-
     pub fn take_pending_responses(&mut self) -> Vec<Vec<u8>> {
         std::mem::take(&mut self.state.pending_responses)
     }
@@ -426,6 +422,19 @@ impl Perform for TerminalState {
                     6 => {
                         // Cursor position report
                         let response = format!("\x1b[{};{}R", self.cursor_row + 1, self.cursor_col + 1);
+                        self.pending_responses.push(response.into_bytes());
+                    }
+                    _ => {}
+                }
+            }
+            't' => {
+                // Window manipulation (XTWINOPS)
+                let mode = get_param(0, 0);
+                match mode {
+                    18 => {
+                        // Report terminal size in characters
+                        // Response: CSI 8 ; rows ; cols t
+                        let response = format!("\x1b[8;{};{}t", self.rows, self.cols);
                         self.pending_responses.push(response.into_bytes());
                     }
                     _ => {}

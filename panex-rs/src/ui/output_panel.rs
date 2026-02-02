@@ -29,8 +29,10 @@ impl Widget for OutputPanel<'_> {
 
                 if process.wrap_enabled && inner_width > 0 {
                     // Wrap mode: split long lines into multiple display lines
+                    // Exclude trailing empty lines (consistent with no-wrap mode)
+                    let content_count = content_buffer_line_count(buffer);
                     let mut wrapped_lines: Vec<Line> = Vec::new();
-                    for line in buffer.iter() {
+                    for line in buffer.iter().take(content_count) {
                         if line.cells.is_empty() {
                             wrapped_lines.push(Line::from(""));
                         } else {
@@ -45,7 +47,7 @@ impl Widget for OutputPanel<'_> {
                         }
                     }
 
-                    let total_lines = wrapped_lines.len();
+                    let total_lines = wrapped_lines.len().max(1);
                     let start = process.scroll_offset.min(total_lines.saturating_sub(1));
                     let end = (start + inner_height).min(total_lines);
 
@@ -80,20 +82,31 @@ impl Widget for OutputPanel<'_> {
     }
 }
 
-/// Compute total display lines accounting for wrap mode
+/// Compute total display lines accounting for wrap mode, excluding trailing empty lines
 fn display_line_count(process: &ManagedProcess, viewport_width: usize) -> usize {
     if process.wrap_enabled && viewport_width > 0 {
         let buffer = process.buffer.get_all_lines();
-        buffer.iter().map(|line| {
+        // Exclude trailing empty lines (consistent with content_line_count)
+        let content_count = content_buffer_line_count(buffer);
+        buffer.iter().take(content_count).map(|line| {
             if line.cells.is_empty() {
                 1
             } else {
                 (line.cells.len() + viewport_width - 1) / viewport_width
             }
-        }).sum()
+        }).sum::<usize>().max(1)
     } else {
         process.buffer.content_line_count()
     }
+}
+
+/// Count buffer lines excluding trailing empty ones
+fn content_buffer_line_count(buffer: &std::collections::VecDeque<crate::process::buffer::Line>) -> usize {
+    let mut count = buffer.len();
+    while count > 0 && buffer[count - 1].cells.is_empty() {
+        count -= 1;
+    }
+    count.max(1)
 }
 
 pub fn scroll_up(process: &mut ManagedProcess, amount: usize) {

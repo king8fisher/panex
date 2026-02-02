@@ -204,12 +204,31 @@ impl ProcessManager {
             }
 
             if process.auto_scroll {
-                let cursor_row = process.buffer.cursor_row();
                 let visible = self.rows as usize;
-                // Scroll to show content, not the empty line where cursor sits after newline
-                // Use > instead of >= to avoid flickering on TUI apps
-                if cursor_row > visible {
-                    process.scroll_offset = cursor_row.saturating_sub(visible);
+                let lines = process.buffer.get_all_lines();
+                // Exclude trailing empty lines (consistent with render)
+                let content_count = {
+                    let mut count = lines.len();
+                    while count > 0 && lines[count - 1].cells.is_empty() {
+                        count -= 1;
+                    }
+                    count.max(1)
+                };
+                let total_display_lines = if process.wrap_enabled && self.cols > 0 {
+                    let cols = self.cols as usize;
+                    lines.iter().take(content_count).map(|line| {
+                        if line.cells.is_empty() {
+                            1
+                        } else {
+                            (line.cells.len() + cols - 1) / cols
+                        }
+                    }).sum::<usize>().max(1)
+                } else {
+                    content_count
+                };
+                // Scroll to show bottom of content
+                if total_display_lines > visible {
+                    process.scroll_offset = total_display_lines - visible;
                 } else {
                     process.scroll_offset = 0;
                 }

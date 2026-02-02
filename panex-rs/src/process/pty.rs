@@ -90,7 +90,28 @@ impl PtyHandle {
 
     pub fn kill(&self) -> Result<()> {
         let mut child = self.child.lock().map_err(|_| anyhow!("Lock poisoned"))?;
-        child.kill().map_err(|e| anyhow!("Kill failed: {}", e))?;
+
+        // Try to kill the process group first (kills children too)
+        #[cfg(unix)]
+        if let Some(pid) = child.process_id() {
+            // Kill entire process group with SIGTERM
+            unsafe {
+                libc::kill(-(pid as i32), libc::SIGTERM);
+            }
+            // Give processes a moment to terminate gracefully
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            // Force kill if still running
+            unsafe {
+                libc::kill(-(pid as i32), libc::SIGKILL);
+            }
+        }
+
+        // Also call the standard kill as fallback
+        let _ = child.kill();
+
+        // Wait for the child to avoid zombies
+        let _ = child.wait();
+
         Ok(())
     }
 

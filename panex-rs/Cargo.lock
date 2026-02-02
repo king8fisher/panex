@@ -541,6 +541,7 @@ dependencies = [
  "clap",
  "crossterm",
  "futures",
+ "libc",
  "portable-pty",
  "ratatui",
  "tokio",
