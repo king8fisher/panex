@@ -106,6 +106,47 @@ panex --no-auto-copy "npm run api" "npm run web"
 | npm install            | ✅     | ✅            | ❌      | ✅     |
 | No monorepo required   | ✅     | ✅            | ✅      | ❌     |
 
+## panex vs tmux
+
+tmux is a vastly more powerful and mature tool. panex solves a narrower problem with less friction.
+
+**tmux** is a terminal multiplexer — it manages persistent shell sessions with arbitrary layouts, remote detach/reattach, scripting, plugins, and deep customization. It's industry-standard for remote work, server administration, and complex terminal workflows. Decades of development, massive community, battle-tested everywhere.
+
+**panex** is a process runner — it runs N commands in parallel with a built-in UI for monitoring and managing them. No config files, no session concepts, no learning curve.
+
+### Where tmux wins
+
+| Capability | tmux | panex |
+| --- | --- | --- |
+| **Session persistence** | Detach/reattach across disconnections, reboots (with tmux-resurrect) | Sessions die when you quit |
+| **Remote work (SSH)** | Start on server, detach, reconnect later — processes survive | Local only |
+| **Window/pane layouts** | Unlimited windows, arbitrary splits, zoom, resize, rearrange | Fixed split: process list + output |
+| **Scripting & automation** | tmuxinator, teamocil, tmuxp — define complex workspaces in YAML | CLI args only |
+| **Plugin ecosystem** | TPM with dozens of plugins (resurrect, yank, powerline, etc.) | No plugins |
+| **Customization** | Hundreds of options in `.tmux.conf` — keys, status bar, hooks, themes | CLI flags only |
+| **Copy mode** | Vi/emacs navigation, search with `/`, jump through history | Basic visual select (`v`/`V`) |
+| **Shared sessions** | Multiple users attach to the same session (pair programming) | Single-user only |
+| **Maturity** | Decades old, massive community, endless documentation | New, small user base |
+
+### Where panex wins
+
+| Capability | panex | tmux |
+| --- | --- | --- |
+| **Zero config** | `panex "cmd1" "cmd2"` — done | Need tmuxinator/scripts for multi-process startup |
+| **Process lifecycle** | `r` restart, `x` kill, `A` restart all — from the UI | Process dies? Navigate to pane, retype command |
+| **Process status** | Built-in list showing running/exited/crashed with exit codes | No process awareness — just shell panes |
+| **Learning curve** | `?` shows help, mouse works, usable immediately | Steep — prefix keys, no on-screen hints, needs cheat sheets |
+| **Layout** | Automatic — all processes shown immediately | Manual splits, or write a config/script |
+| **npm install** | `npx panex "cmd1" "cmd2"` | Not applicable — system package |
+
+### When to use which
+
+**Use tmux if you need:** remote work, session persistence, complex layouts, shared sessions, deep customization, or long-running server processes.
+
+**Use panex if you need:** run a handful of dev commands in parallel (API + frontend + worker), see their status, restart them easily, and not think about configuration. It's the difference between a Swiss Army knife and a purpose-built tool.
+
+They're not mutually exclusive — you can run panex inside a tmux session.
+
 ## Development
 
 ```bash
