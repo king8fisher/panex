@@ -1,5 +1,5 @@
 use crate::input::clipboard::copy_to_clipboard;
-use crate::input::selection::{extract_selected_text, BufferPos, SelectionPhase};
+use crate::input::selection::{extract_selected_text, visual_row_to_buffer_row, BufferPos, SelectionPhase};
 use crate::process::ProcessManager;
 use crate::ui::output_panel::{scroll_down, scroll_to_bottom, scroll_to_top, scroll_up};
 use crate::ui::{App, InputMode};
@@ -154,7 +154,11 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
             if let Some(name) = &selected_name {
                 if let Some(process) = pm.get_process(name) {
                     // Start char-wise visual at top-left of visible area
-                    let pos = BufferPos::new(process.scroll_offset, 0);
+                    let pos = if process.wrap_enabled {
+                        visual_row_to_buffer_row(process.scroll_offset, process.buffer.get_all_lines(), viewport_width)
+                    } else {
+                        BufferPos::new(process.scroll_offset, 0)
+                    };
                     app.selection.start_visual(pos, false);
                 }
             }
@@ -163,7 +167,11 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
             if let Some(name) = &selected_name {
                 if let Some(process) = pm.get_process(name) {
                     // Start line-wise visual at current scroll position
-                    let pos = BufferPos::new(process.scroll_offset, 0);
+                    let pos = if process.wrap_enabled {
+                        visual_row_to_buffer_row(process.scroll_offset, process.buffer.get_all_lines(), viewport_width)
+                    } else {
+                        BufferPos::new(process.scroll_offset, 0)
+                    };
                     app.selection.start_visual(pos, true);
                 }
             }

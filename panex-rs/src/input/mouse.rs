@@ -1,6 +1,7 @@
 use crate::input::clipboard::copy_to_clipboard;
 use crate::input::selection::{
-    expand_to_word, extract_selected_text, screen_to_buffer, BufferPos, SelectionPhase,
+    expand_to_word, extract_selected_text, screen_to_buffer, screen_to_buffer_wrapped,
+    visual_to_buffer, BufferPos, SelectionPhase,
 };
 use crate::process::ProcessManager;
 use crate::ui::app::DragEdge;
@@ -127,13 +128,24 @@ pub fn handle_mouse(
                 // Handle double/triple click immediately (word/line select)
                 if let Some(name) = &selected_name {
                     if let Some(process) = pm.get_process(name) {
-                        let pos = screen_to_buffer(
-                            event.column.max(OUTPUT_PANEL_X),
-                            event.row,
-                            OUTPUT_PANEL_X,
-                            process.scroll_offset,
-                            viewport_width,
-                        );
+                        let pos = if process.wrap_enabled {
+                            screen_to_buffer_wrapped(
+                                event.column.max(OUTPUT_PANEL_X),
+                                event.row,
+                                OUTPUT_PANEL_X,
+                                process.scroll_offset,
+                                process.buffer.get_all_lines(),
+                                viewport_width,
+                            )
+                        } else {
+                            screen_to_buffer(
+                                event.column.max(OUTPUT_PANEL_X),
+                                event.row,
+                                OUTPUT_PANEL_X,
+                                process.scroll_offset,
+                                viewport_width,
+                            )
+                        };
                         app.selection
                             .start_mouse_select(pos, event.column, event.row);
 
@@ -170,13 +182,24 @@ pub fn handle_mouse(
                 app.pending_click = None;
                 if let Some(name) = &selected_name {
                     if let Some(process) = pm.get_process(name) {
-                        let anchor_pos = screen_to_buffer(
-                            click_col.max(OUTPUT_PANEL_X),
-                            click_row,
-                            OUTPUT_PANEL_X,
-                            process.scroll_offset,
-                            viewport_width,
-                        );
+                        let anchor_pos = if process.wrap_enabled {
+                            screen_to_buffer_wrapped(
+                                click_col.max(OUTPUT_PANEL_X),
+                                click_row,
+                                OUTPUT_PANEL_X,
+                                process.scroll_offset,
+                                process.buffer.get_all_lines(),
+                                viewport_width,
+                            )
+                        } else {
+                            screen_to_buffer(
+                                click_col.max(OUTPUT_PANEL_X),
+                                click_row,
+                                OUTPUT_PANEL_X,
+                                process.scroll_offset,
+                                viewport_width,
+                            )
+                        };
                         app.selection.begin_drag(anchor_pos);
                     }
                 }
@@ -215,16 +238,50 @@ pub fn handle_mouse(
 
                     let pos = if row >= visible_height {
                         // Dragging onto/past status bar = end of last visible line
-                        let buf_row = last_row + process.scroll_offset;
-                        BufferPos::new(buf_row, usize::MAX)
+                        if process.wrap_enabled {
+                            let visual_row = last_row + process.scroll_offset;
+                            let mut p = visual_to_buffer(visual_row, 0, process.buffer.get_all_lines(), viewport_width);
+                            p.col = usize::MAX;
+                            p
+                        } else {
+                            let buf_row = last_row + process.scroll_offset;
+                            BufferPos::new(buf_row, usize::MAX)
+                        }
                     } else if event.column <= GUTTER_START {
                         // Dragging to gutter = end of previous line
-                        let buf_row = clamped_row as usize + process.scroll_offset;
-                        if buf_row > 0 {
-                            BufferPos::new(buf_row - 1, usize::MAX)
+                        if process.wrap_enabled {
+                            let visual_row = clamped_row as usize + process.scroll_offset;
+                            let p = visual_to_buffer(visual_row, 0, process.buffer.get_all_lines(), viewport_width);
+                            if p.row > 0 || p.col > 0 {
+                                // Go to end of previous buffer row
+                                if p.col > 0 {
+                                    // We're in the middle of a wrapped line; previous visual line is same buffer row
+                                    BufferPos::new(p.row, p.col.saturating_sub(1))
+                                } else if p.row > 0 {
+                                    BufferPos::new(p.row - 1, usize::MAX)
+                                } else {
+                                    BufferPos::new(0, 0)
+                                }
+                            } else {
+                                BufferPos::new(0, 0)
+                            }
                         } else {
-                            BufferPos::new(0, 0)
+                            let buf_row = clamped_row as usize + process.scroll_offset;
+                            if buf_row > 0 {
+                                BufferPos::new(buf_row - 1, usize::MAX)
+                            } else {
+                                BufferPos::new(0, 0)
+                            }
                         }
+                    } else if process.wrap_enabled {
+                        screen_to_buffer_wrapped(
+                            event.column,
+                            clamped_row,
+                            OUTPUT_PANEL_X,
+                            process.scroll_offset,
+                            process.buffer.get_all_lines(),
+                            viewport_width,
+                        )
                     } else {
                         screen_to_buffer(
                             event.column,
@@ -315,11 +372,25 @@ pub fn tick_edge_scroll(
 
     // Update selection cursor to track the scroll
     if let Some(process) = pm.get_process(&name) {
-        let pos = match edge {
-            DragEdge::Top => BufferPos::new(process.scroll_offset, 0),
-            DragEdge::Bottom => {
-                let buf_row = visible_height.saturating_sub(1) + process.scroll_offset;
-                BufferPos::new(buf_row, usize::MAX)
+        let pos = if process.wrap_enabled {
+            match edge {
+                DragEdge::Top => {
+                    visual_to_buffer(process.scroll_offset, 0, process.buffer.get_all_lines(), viewport_width)
+                }
+                DragEdge::Bottom => {
+                    let visual_row = visible_height.saturating_sub(1) + process.scroll_offset;
+                    let mut p = visual_to_buffer(visual_row, 0, process.buffer.get_all_lines(), viewport_width);
+                    p.col = usize::MAX;
+                    p
+                }
+            }
+        } else {
+            match edge {
+                DragEdge::Top => BufferPos::new(process.scroll_offset, 0),
+                DragEdge::Bottom => {
+                    let buf_row = visible_height.saturating_sub(1) + process.scroll_offset;
+                    BufferPos::new(buf_row, usize::MAX)
+                }
             }
         };
         app.selection.update_mouse_drag(pos);

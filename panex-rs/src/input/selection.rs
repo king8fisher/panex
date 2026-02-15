@@ -194,7 +194,7 @@ impl SelectionState {
     }
 }
 
-/// Map screen coordinates to buffer position
+/// Map screen coordinates to buffer position (non-wrap mode)
 /// panel_x: left edge of the output panel in screen coordinates
 /// scroll_offset: current scroll offset of the process buffer
 pub fn screen_to_buffer(
@@ -207,6 +207,71 @@ pub fn screen_to_buffer(
     let col = screen_col.saturating_sub(panel_x) as usize;
     let row = screen_row as usize + scroll_offset;
     BufferPos::new(row, col)
+}
+
+/// Map a visual (wrapped) line index + column to a buffer position.
+/// Walks buffer lines, splitting each into ceil(len / viewport_width) visual lines.
+pub fn visual_to_buffer(
+    visual_row: usize,
+    visual_col: usize,
+    buffer: &std::collections::VecDeque<crate::process::buffer::Line>,
+    viewport_width: usize,
+) -> BufferPos {
+    if viewport_width == 0 {
+        return BufferPos::new(0, visual_col);
+    }
+    let content_count = content_line_count(buffer);
+    let mut visual = 0usize;
+    for row_idx in 0..content_count {
+        let line = &buffer[row_idx];
+        let n_visual = if line.cells.is_empty() {
+            1
+        } else {
+            (line.cells.len() + viewport_width - 1) / viewport_width
+        };
+        if visual_row < visual + n_visual {
+            let chunk_index = visual_row - visual;
+            let col = chunk_index * viewport_width + visual_col;
+            return BufferPos::new(row_idx, col);
+        }
+        visual += n_visual;
+    }
+    // Clamp to last buffer line
+    let last = content_count.saturating_sub(1);
+    BufferPos::new(last, visual_col)
+}
+
+/// Map screen coordinates to buffer position in wrap mode.
+pub fn screen_to_buffer_wrapped(
+    screen_col: u16,
+    screen_row: u16,
+    panel_x: u16,
+    scroll_offset: usize,
+    buffer: &std::collections::VecDeque<crate::process::buffer::Line>,
+    viewport_width: usize,
+) -> BufferPos {
+    let col = screen_col.saturating_sub(panel_x) as usize;
+    let visual_row = screen_row as usize + scroll_offset;
+    visual_to_buffer(visual_row, col, buffer, viewport_width)
+}
+
+/// Map a visual row (scroll_offset-based) to the corresponding buffer row.
+/// Useful for edge-scroll and keyboard visual select where column is handled separately.
+pub fn visual_row_to_buffer_row(
+    visual_row: usize,
+    buffer: &std::collections::VecDeque<crate::process::buffer::Line>,
+    viewport_width: usize,
+) -> BufferPos {
+    visual_to_buffer(visual_row, 0, buffer, viewport_width)
+}
+
+/// Count buffer lines excluding trailing empty ones (mirrors output_panel logic).
+fn content_line_count(buffer: &std::collections::VecDeque<crate::process::buffer::Line>) -> usize {
+    let mut count = buffer.len();
+    while count > 0 && buffer[count - 1].cells.is_empty() {
+        count -= 1;
+    }
+    count.max(1)
 }
 
 /// Extract selected text from buffer
