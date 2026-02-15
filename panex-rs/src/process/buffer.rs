@@ -300,7 +300,7 @@ impl Perform for TerminalState {
     fn osc_dispatch(&mut self, _params: &[&[u8]], _bell_terminated: bool) {}
     fn esc_dispatch(&mut self, _intermediates: &[u8], _ignore: bool, _byte: u8) {}
 
-    fn csi_dispatch(&mut self, params: &Params, _intermediates: &[u8], _ignore: bool, action: char) {
+    fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], _ignore: bool, action: char) {
         let params_vec: Vec<u16> = params.iter().flat_map(|p| p.iter().copied()).collect();
         let get_param = |i: usize, default: u16| -> u16 {
             params_vec.get(i).copied().filter(|&v| v != 0).unwrap_or(default)
@@ -438,6 +438,21 @@ impl Perform for TerminalState {
                         self.pending_responses.push(response.into_bytes());
                     }
                     _ => {}
+                }
+            }
+            'h' | 'l' => {
+                // DEC Private Mode Set/Reset (CSI ? ... h/l)
+                if intermediates == b"?" {
+                    let mode = get_param(0, 0);
+                    match mode {
+                        1049 | 1047 | 47 => {
+                            // Alternate screen buffer: clear on enter
+                            if action == 'h' {
+                                self.clear_screen();
+                            }
+                        }
+                        _ => {}
+                    }
                 }
             }
             _ => {}

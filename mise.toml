@@ -31,7 +31,7 @@ run = "cargo build --release"
 dir = "scripts"
 run = "zig build-exe fire.zig -O ReleaseFast"
 
-[tasks.dev]
+[tasks.dev-with-fire]
 wait_for = ["build", "build-fire"]
 dir = "panex-rs"
 run = """
@@ -46,6 +46,26 @@ cargo run -- \
   "mise x gum -- gum spin --spinner dot --title 'Loading...' -- sleep 100" \
   "mise x cowsay -- cowsay 'Hello from panex!'" \
   "mise build-fire && ../scripts/fire hash" \
-  -n fastfetch,fastfetch:w,bottom,lazygit,yazi,glow,gitui,gum-spinner,cowsay,fire
+  "cargo run -- 'mise x gitui -- gitui' 'echo nested' -n gitui,echo" \
+  -n fastfetch,fastfetch:w,bottom,lazygit,yazi,glow,gitui,gum-spinner,cowsay,fire,panex!
+  -t 5000
+"""
+
+[tasks.dev]
+wait_for = ["build"]
+dir = "panex-rs"
+run = """
+cargo run -- \
+  "mise x fastfetch -- fastfetch" \
+  "mise x fastfetch -- fastfetch" \
+  "mise x bottom -- btm" \
+  "mise x lazygit -- lazygit" \
+  "mise x yazi -- yazi" \
+  "mise x glow -- glow ../README.md" \
+  "mise x gitui -- gitui" \
+  "mise x gum -- gum spin --spinner dot --title 'Loading...' -- sleep 100" \
+  "mise x cowsay -- cowsay 'Hello from panex!'" \
+  "cargo run -- 'mise x gitui -- gitui' 'mise x lazygit -- lazygit' -n gitui,lazygit" \
+  -n fastfetch,fastfetch:w,bottom,lazygit,yazi,glow,gitui,gum-spinner,cowsay,panex!
   -t 5000
 """

@@ -1,3 +1,5 @@
+use crate::input::clipboard::copy_to_clipboard;
+use crate::input::selection::{extract_selected_text, BufferPos, SelectionPhase};
 use crate::process::ProcessManager;
 use crate::ui::output_panel::{scroll_down, scroll_to_bottom, scroll_to_top, scroll_up};
 use crate::ui::{App, InputMode};
@@ -42,6 +44,73 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
     let count = pm.process_count();
     let selected_name = pm.process_names().get(app.selected_index).cloned();
 
+    // Handle selection mode keys first
+    if app.selection.is_active() {
+        // Ctrl-C with active selection = copy (not quit)
+        let is_copy = matches!(key.code, KeyCode::Char('y') | KeyCode::Enter)
+            || (matches!(key.code, KeyCode::Char('c')) && key.modifiers.contains(KeyModifiers::CONTROL));
+
+        match key.code {
+            KeyCode::Esc => {
+                app.selection.clear();
+                return;
+            }
+            _ if is_copy => {
+                // Copy selection to clipboard
+                if let Some(name) = &selected_name {
+                    if let Some(process) = pm.get_process(name) {
+                        let text = extract_selected_text(
+                            &app.selection,
+                            process.buffer.get_all_lines(),
+                        );
+                        if !text.is_empty() && copy_to_clipboard(&text) {
+                            app.set_status("Copied!");
+                        }
+                    }
+                }
+                app.selection.clear();
+                return;
+            }
+            // Movement keys while in visual select
+            KeyCode::Up | KeyCode::Char('k') => {
+                if app.selection.phase == SelectionPhase::Selecting {
+                    let cur = app.selection.cursor;
+                    if cur.row > 0 {
+                        app.selection.move_cursor(BufferPos::new(cur.row - 1, cur.col));
+                    }
+                }
+                return;
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if app.selection.phase == SelectionPhase::Selecting {
+                    let cur = app.selection.cursor;
+                    app.selection.move_cursor(BufferPos::new(cur.row + 1, cur.col));
+                }
+                return;
+            }
+            KeyCode::Left | KeyCode::Char('h') => {
+                if app.selection.phase == SelectionPhase::Selecting {
+                    let cur = app.selection.cursor;
+                    if cur.col > 0 {
+                        app.selection.move_cursor(BufferPos::new(cur.row, cur.col - 1));
+                    }
+                }
+                return;
+            }
+            KeyCode::Right | KeyCode::Char('l') => {
+                if app.selection.phase == SelectionPhase::Selecting {
+                    let cur = app.selection.cursor;
+                    app.selection.move_cursor(BufferPos::new(cur.row, cur.col + 1));
+                }
+                return;
+            }
+            _ => {
+                // Any other key cancels selection
+                app.selection.clear();
+            }
+        }
+    }
+
     match key.code {
         // Quit
         KeyCode::Char('q') => app.quit(),
@@ -76,6 +145,26 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
             if let Some(name) = selected_name {
                 if let Some(process) = pm.get_process_mut(&name) {
                     process.wrap_enabled = !process.wrap_enabled;
+                }
+            }
+        }
+
+        // Visual select
+        KeyCode::Char('v') => {
+            if let Some(name) = &selected_name {
+                if let Some(process) = pm.get_process(name) {
+                    // Start char-wise visual at top-left of visible area
+                    let pos = BufferPos::new(process.scroll_offset, 0);
+                    app.selection.start_visual(pos, false);
+                }
+            }
+        }
+        KeyCode::Char('V') => {
+            if let Some(name) = &selected_name {
+                if let Some(process) = pm.get_process(name) {
+                    // Start line-wise visual at current scroll position
+                    let pos = BufferPos::new(process.scroll_offset, 0);
+                    app.selection.start_visual(pos, true);
                 }
             }
         }

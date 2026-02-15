@@ -16,6 +16,8 @@ A terminal UI for running multiple processes in parallel. Like Turborepo's TUI, 
 - **Native binary** - Fast startup, no runtime dependencies
 - **Wrapped lines** - Optional line wrapping per pane (`:w` label suffix)
 - **Interactive mode** - Focus a pane for full interactivity (with Mouse support)
+- **Mouse forwarding** - Mouse clicks/drags/scrolls forwarded to child TUI apps in focus mode
+- **Nestable** - Run panex inside panex, or any TUI app, with correct rendering
 
 ## Installation
 
@@ -51,6 +53,9 @@ panex "helix" "npm run build" -n "helix!:w,build:w"
 
 # Custom shutdown timeout (default: 500ms)
 panex -t 1000 "npm run dev"  # 1 second graceful shutdown
+
+# Disable auto-copy on mouse select (require y/Enter/Ctrl-C to copy)
+panex --no-auto-copy "npm run api" "npm run web"
 ```
 
 ### Keyboard Shortcuts
@@ -70,16 +75,26 @@ panex -t 1000 "npm run dev"  # 1 second graceful shutdown
 | `b`         | Jump to bottom                    |
 | `PgUp/PgDn` | Scroll output                     |
 | `?`         | Show help                         |
+| `v`         | Visual select (char-wise)         |
+| `V`         | Visual select (line-wise)         |
+| `y/Enter`   | Copy selection to clipboard       |
 | `q`         | Quit panex                        |
 
 ### Mouse
+
+**Browse mode:**
 
 | Click        | Action                  |
 | ------------ | ----------------------- |
 | Left panel   | Exit focus, select item |
 | Right panel  | Enter focus mode        |
+| Drag         | Select text (auto-copy) |
+| Double-click | Select word             |
+| Triple-click | Select line             |
 | Status bar   | Exit focus mode         |
 | Scroll wheel | Scroll output           |
+
+**Focus mode:** All mouse events (click, drag, scroll) on the output panel are forwarded to the child process as SGR escape sequences. Click the left panel or status bar to exit focus.
 
 ## Why panex?
 

@@ -19,6 +19,7 @@ portable-pty = "0.8"
 vte = "0.13"
 anyhow = "1"
 futures = "0.3"
+arboard = "3"
 
 [profile.release]
 lto = true

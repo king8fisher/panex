@@ -6,7 +6,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{List, ListItem, Widget},
+    widgets::{Block, List, ListItem, Widget},
 };
 
 /// Strip display suffixes (:w, !) from process name for rendering
@@ -42,6 +42,9 @@ impl<'a> ProcessList<'a> {
 
 impl Widget for ProcessList<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        // Clear entire area first to prevent artifacts from underlying terminal
+        Block::default().render(area, buf);
+
         let width = area.width as usize;
 
         let items: Vec<ListItem> = self

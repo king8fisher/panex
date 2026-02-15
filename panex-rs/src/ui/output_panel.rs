@@ -1,26 +1,32 @@
+use crate::input::SelectionState;
 use crate::process::ManagedProcess;
 use crate::ui::InputMode;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
+    style::Modifier,
     text::{Line, Span},
-    widgets::{Paragraph, Widget},
+    widgets::{Block, Paragraph, Widget},
 };
 
 pub struct OutputPanel<'a> {
     process: Option<&'a ManagedProcess>,
     #[allow(dead_code)]
     mode: InputMode,
+    selection: &'a SelectionState,
 }
 
 impl<'a> OutputPanel<'a> {
-    pub fn new(process: Option<&'a ManagedProcess>, mode: InputMode) -> Self {
-        Self { process, mode }
+    pub fn new(process: Option<&'a ManagedProcess>, mode: InputMode, selection: &'a SelectionState) -> Self {
+        Self { process, mode, selection }
     }
 }
 
 impl Widget for OutputPanel<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        // Clear entire area first to prevent artifacts from underlying terminal
+        Block::default().render(area, buf);
+
         let lines = match self.process {
             Some(process) => {
                 let buffer = process.buffer.get_all_lines();
@@ -29,20 +35,32 @@ impl Widget for OutputPanel<'_> {
 
                 if process.wrap_enabled && inner_width > 0 {
                     // Wrap mode: split long lines into multiple display lines
-                    // Exclude trailing empty lines (consistent with no-wrap mode)
                     let content_count = content_buffer_line_count(buffer);
                     let mut wrapped_lines: Vec<Line> = Vec::new();
-                    for line in buffer.iter().take(content_count) {
+                    // Track buffer row for each wrapped line (for selection)
+                    let mut line_map: Vec<(usize, usize)> = Vec::new(); // (buffer_row, start_col)
+                    for (row_idx, line) in buffer.iter().take(content_count).enumerate() {
                         if line.cells.is_empty() {
                             wrapped_lines.push(Line::from(""));
+                            line_map.push((row_idx, 0));
                         } else {
-                            // Split line into chunks of inner_width
-                            for chunk in line.cells.chunks(inner_width) {
+                            for (chunk_idx, chunk) in line.cells.chunks(inner_width).enumerate() {
+                                let start_col = chunk_idx * inner_width;
                                 let spans: Vec<Span> = chunk
                                     .iter()
-                                    .map(|cell| Span::styled(cell.c.to_string(), cell.style))
+                                    .enumerate()
+                                    .map(|(i, cell)| {
+                                        let col = start_col + i;
+                                        let style = if self.selection.contains(row_idx, col) {
+                                            cell.style.add_modifier(Modifier::REVERSED)
+                                        } else {
+                                            cell.style
+                                        };
+                                        Span::styled(cell.c.to_string(), style)
+                                    })
                                     .collect();
                                 wrapped_lines.push(Line::from(spans));
+                                line_map.push((row_idx, start_col));
                             }
                         }
                     }
@@ -60,14 +78,23 @@ impl Widget for OutputPanel<'_> {
 
                     buffer
                         .iter()
+                        .enumerate()
                         .skip(start)
                         .take(end - start)
-                        .map(|line| {
+                        .map(|(row_idx, line)| {
                             let spans: Vec<Span> = line
                                 .cells
                                 .iter()
+                                .enumerate()
                                 .take(inner_width)
-                                .map(|cell| Span::styled(cell.c.to_string(), cell.style))
+                                .map(|(col, cell)| {
+                                    let style = if self.selection.contains(row_idx, col) {
+                                        cell.style.add_modifier(Modifier::REVERSED)
+                                    } else {
+                                        cell.style
+                                    };
+                                    Span::styled(cell.c.to_string(), style)
+                                })
                                 .collect();
                             Line::from(spans)
                         })

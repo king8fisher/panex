@@ -18,6 +18,7 @@ use process::ProcessManager;
 use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Layout},
+    widgets::Block,
     Terminal,
 };
 use std::io::{self, Write};
@@ -50,6 +51,10 @@ struct Cli {
     #[arg(long)]
     no_shift_tab: bool,
 
+    /// Disable auto-copy on mouse selection release (require explicit y/Enter)
+    #[arg(long)]
+    no_auto_copy: bool,
+
     /// Graceful shutdown timeout in ms before force kill (default: 500)
     #[arg(short = 't', long, default_value = "500")]
     timeout: u64,
@@ -65,11 +70,12 @@ async fn main() -> Result<()> {
     }
 
     let config = PanexConfig::from_args(cli.commands, cli.names, cli.no_shift_tab, cli.timeout);
+    let auto_copy = !cli.no_auto_copy;
 
-    run(config).await
+    run(config, auto_copy).await
 }
 
-async fn run(config: PanexConfig) -> Result<()> {
+async fn run(config: PanexConfig, auto_copy: bool) -> Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -77,7 +83,7 @@ async fn run(config: PanexConfig) -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    let result = run_app(&mut terminal, config).await;
+    let result = run_app(&mut terminal, config, auto_copy).await;
 
     // Disable mouse capture first to stop new mouse events
     execute!(terminal.backend_mut(), DisableMouseCapture)?;
@@ -104,6 +110,7 @@ async fn run(config: PanexConfig) -> Result<()> {
 async fn run_app(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     config: PanexConfig,
+    auto_copy: bool,
 ) -> Result<()> {
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AppEvent>();
 
@@ -121,7 +128,7 @@ async fn run_app(
     // Start all processes
     pm.start_all()?;
 
-    let mut app = App::new(config.no_shift_tab);
+    let mut app = App::new(config.no_shift_tab, auto_copy);
     let mut event_stream = EventStream::new();
     let mut last_size: Option<(u16, u16)> = None;
     let mut pending_resize: Option<(u16, u16)> = None;
@@ -149,17 +156,20 @@ async fn run_app(
             let process_list = ProcessList::new(&pm, app.selected_index, app.mode);
             f.render_widget(process_list, content_chunks[0]);
 
+            // Delimiter (clear the column so no artifacts bleed through)
+            f.render_widget(Block::default(), content_chunks[1]);
+
             // Output panel
             let selected_name = pm.process_names().get(app.selected_index).cloned();
             let selected_process = selected_name.as_ref().and_then(|n| pm.get_process(n));
-            let output_panel = OutputPanel::new(selected_process, app.mode);
+            let output_panel = OutputPanel::new(selected_process, app.mode, &app.selection);
             f.render_widget(output_panel, content_chunks[2]);
 
             // Status bar
             let proc_no_shift_tab = selected_process
                 .map(|p| p.config.no_shift_tab)
                 .unwrap_or(false);
-            let status_bar = StatusBar::new(app.mode, app.no_shift_tab, proc_no_shift_tab);
+            let status_bar = StatusBar::new(app.mode, app.no_shift_tab, proc_no_shift_tab, app.active_status());
             f.render_widget(status_bar, main_chunks[1]);
 
             // Help popup
@@ -225,6 +235,9 @@ async fn run_app(
         let visible_height = term_size.height.saturating_sub(1) as usize; // -1 for status bar
         let viewport_width = term_size.width.saturating_sub(21) as usize; // -20 for process list, -1 for delimiter
 
+        // Edge-scroll during drag selection (runs every iteration)
+        input::mouse::tick_edge_scroll(&mut app, &mut pm, visible_height, viewport_width);
+
         // Handle events - biased ensures terminal events (quit) are checked first
         tokio::select! {
             biased;
@@ -262,7 +275,7 @@ async fn run_app(
                     AppEvent::Tick => {}
                 }
             }
-            // Periodic timeout to ensure quit check runs even when blocked
+            // Periodic timeout to ensure quit/redraw runs even when blocked
             _ = tokio::time::sleep(Duration::from_millis(100)) => {}
         }
     }

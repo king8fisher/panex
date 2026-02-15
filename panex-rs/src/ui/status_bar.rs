@@ -2,28 +2,29 @@ use crate::ui::InputMode;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Paragraph, Widget},
 };
 
-pub struct StatusBar {
+pub struct StatusBar<'a> {
     mode: InputMode,
-    no_shift_tab: bool,         // Global flag
-    proc_no_shift_tab: bool,    // Per-process flag
+    no_shift_tab: bool,
+    proc_no_shift_tab: bool,
+    status_message: Option<&'a str>,
 }
 
-impl StatusBar {
-    pub fn new(mode: InputMode, no_shift_tab: bool, proc_no_shift_tab: bool) -> Self {
-        Self { mode, no_shift_tab, proc_no_shift_tab }
+impl<'a> StatusBar<'a> {
+    pub fn new(mode: InputMode, no_shift_tab: bool, proc_no_shift_tab: bool, status_message: Option<&'a str>) -> Self {
+        Self { mode, no_shift_tab, proc_no_shift_tab, status_message }
     }
 }
 
-impl Widget for StatusBar {
+impl Widget for StatusBar<'_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let no_shift_tab = self.no_shift_tab || self.proc_no_shift_tab;
         let hints = match self.mode {
-            InputMode::Browse => "↑↓:nav  Enter/Tab:focus  r:restart  A:all  x:kill  g:pin  t/b:top/bot  ?:help  q:quit",
+            InputMode::Browse => "↑↓:nav  Enter/Tab:focus  r:restart  A:all  x:kill  g:pin  t/b:top/bot  v/V:select  ?:help  q:quit",
             InputMode::Focus => {
                 if no_shift_tab {
                     "Click LPanel:exit"
@@ -33,8 +34,21 @@ impl Widget for StatusBar {
             }
         };
 
+        // Show COPIED badge in place of mode label when status message is active
+        let mode_badge = if self.status_message.is_some() {
+            Span::styled(
+                " COPIED ",
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else {
+            self.mode.styled_label()
+        };
+
         let line = Line::from(vec![
-            self.mode.styled_label(),
+            mode_badge,
             Span::raw(" "),
             Span::styled(hints, Style::default().fg(Color::DarkGray)),
         ]);
