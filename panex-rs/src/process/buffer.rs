@@ -42,6 +42,11 @@ struct TerminalState {
     current_style: Style,
     saved_cursor: Option<(usize, usize)>,
     pending_responses: Vec<Vec<u8>>,
+    /// Scroll region: (top, bottom) 0-indexed, inclusive. None = full screen.
+    scroll_region: Option<(usize, usize)>,
+    /// Whether we're in alternate screen buffer mode (CSI ?1049h).
+    /// In alternate mode, buffer is fixed at `rows` lines and scrolls at bottom.
+    alternate_screen: bool,
 }
 
 impl TerminalBuffer {
@@ -55,6 +60,17 @@ impl TerminalBuffer {
     pub fn resize(&mut self, cols: usize, rows: usize) {
         self.state.cols = cols;
         self.state.rows = rows;
+        self.state.scroll_region = None;
+        // In alternate screen mode, truncate buffer to new screen size
+        // and clamp cursor so no stale lines remain past the screen bottom.
+        if self.state.alternate_screen && rows > 0 {
+            while self.state.lines.len() > rows {
+                self.state.lines.pop_back();
+            }
+            if self.state.cursor_row >= rows {
+                self.state.cursor_row = rows - 1;
+            }
+        }
     }
 
     pub fn write(&mut self, data: &[u8]) {
@@ -95,18 +111,29 @@ impl TerminalState {
             current_style: Style::default(),
             saved_cursor: None,
             pending_responses: Vec::new(),
+            scroll_region: None,
+            alternate_screen: false,
         }
     }
 
     fn ensure_row(&mut self, row: usize) {
-        while self.lines.len() <= row {
+        // In alternate screen mode, never grow buffer beyond `rows` lines
+        let max = if self.alternate_screen && self.rows > 0 {
+            self.rows.saturating_sub(1)
+        } else {
+            row
+        };
+        let target = row.min(max);
+        while self.lines.len() <= target {
             self.lines.push_back(Line::new());
         }
-        // Trim if over max scrollback
-        while self.lines.len() > MAX_SCROLLBACK {
-            self.lines.pop_front();
-            if self.cursor_row > 0 {
-                self.cursor_row -= 1;
+        // Trim if over max scrollback (only relevant in normal mode)
+        if !self.alternate_screen {
+            while self.lines.len() > MAX_SCROLLBACK {
+                self.lines.pop_front();
+                if self.cursor_row > 0 {
+                    self.cursor_row -= 1;
+                }
             }
         }
     }
@@ -123,9 +150,54 @@ impl TerminalState {
     }
 
     fn newline(&mut self) {
+        if let Some((top, bottom)) = self.scroll_region {
+            if self.cursor_row >= top && self.cursor_row <= bottom {
+                if self.cursor_row == bottom {
+                    self.scroll_region_up(top, bottom, 1);
+                } else {
+                    self.cursor_row += 1;
+                    self.ensure_row(self.cursor_row);
+                }
+                self.cursor_col = 0;
+                return;
+            }
+        }
+        if self.alternate_screen && self.rows > 0 {
+            // In alternate screen: clamp to screen bottom, never grow buffer
+            let screen_bottom = self.rows - 1;
+            if self.cursor_row < screen_bottom {
+                self.cursor_row += 1;
+            }
+            // At screen bottom outside scroll region: stay put
+            self.cursor_col = 0;
+            return;
+        }
+        // Normal mode: grow buffer (preserves scrollback)
         self.cursor_row += 1;
         self.cursor_col = 0;
         self.ensure_row(self.cursor_row);
+    }
+
+    /// Scroll content up within [top, bottom] by `n` lines.
+    fn scroll_region_up(&mut self, top: usize, bottom: usize, n: usize) {
+        self.ensure_row(bottom);
+        for _ in 0..n {
+            if top <= bottom && bottom < self.lines.len() {
+                self.lines.remove(top);
+                self.lines.insert(bottom, Line::new());
+            }
+        }
+    }
+
+    /// Scroll content down within [top, bottom] by `n` lines.
+    fn scroll_region_down(&mut self, top: usize, bottom: usize, n: usize) {
+        self.ensure_row(bottom);
+        for _ in 0..n {
+            if top <= bottom && bottom < self.lines.len() {
+                self.lines.remove(bottom);
+                self.lines.insert(top, Line::new());
+            }
+        }
     }
 
     fn put_char(&mut self, c: char) {
@@ -160,6 +232,7 @@ impl TerminalState {
         self.lines.push_back(Line::new());
         self.cursor_row = 0;
         self.cursor_col = 0;
+        self.scroll_region = None;
     }
 
     fn parse_sgr(&mut self, params: &Params) {
@@ -310,12 +383,33 @@ impl Perform for TerminalState {
             'A' => {
                 // Cursor up
                 let n = get_param(0, 1) as usize;
-                self.cursor_row = self.cursor_row.saturating_sub(n);
+                if let Some((top, bottom)) = self.scroll_region {
+                    if self.cursor_row >= top && self.cursor_row <= bottom {
+                        // Inside scroll region: clamp to top
+                        self.cursor_row = self.cursor_row.saturating_sub(n).max(top);
+                    } else {
+                        self.cursor_row = self.cursor_row.saturating_sub(n);
+                    }
+                } else {
+                    self.cursor_row = self.cursor_row.saturating_sub(n);
+                }
             }
             'B' => {
                 // Cursor down
                 let n = get_param(0, 1) as usize;
-                self.cursor_row += n;
+                if let Some((top, bottom)) = self.scroll_region {
+                    if self.cursor_row >= top && self.cursor_row <= bottom {
+                        self.cursor_row = (self.cursor_row + n).min(bottom);
+                    } else if self.alternate_screen && self.rows > 0 {
+                        self.cursor_row = (self.cursor_row + n).min(self.rows - 1);
+                    } else {
+                        self.cursor_row += n;
+                    }
+                } else if self.alternate_screen && self.rows > 0 {
+                    self.cursor_row = (self.cursor_row + n).min(self.rows - 1);
+                } else {
+                    self.cursor_row += n;
+                }
                 self.ensure_row(self.cursor_row);
             }
             'C' => {
@@ -332,6 +426,9 @@ impl Perform for TerminalState {
                 // Cursor next line
                 let n = get_param(0, 1) as usize;
                 self.cursor_row += n;
+                if self.alternate_screen && self.rows > 0 {
+                    self.cursor_row = self.cursor_row.min(self.rows - 1);
+                }
                 self.cursor_col = 0;
                 self.ensure_row(self.cursor_row);
             }
@@ -348,8 +445,11 @@ impl Perform for TerminalState {
             }
             'H' | 'f' => {
                 // Cursor position
-                let row = get_param(0, 1).saturating_sub(1) as usize;
+                let mut row = get_param(0, 1).saturating_sub(1) as usize;
                 let col = get_param(1, 1).saturating_sub(1) as usize;
+                if self.alternate_screen && self.rows > 0 {
+                    row = row.min(self.rows - 1);
+                }
                 self.cursor_row = row;
                 self.cursor_col = col.min(MAX_LINE_WIDTH - 1);
                 self.ensure_row(self.cursor_row);
@@ -389,6 +489,63 @@ impl Perform for TerminalState {
                         self.lines[self.cursor_row].cells.clear();
                     }
                     _ => {}
+                }
+            }
+            'r' => {
+                // DECSTBM - Set Scrolling Region
+                // CSI top ; bottom r  (1-indexed, default = full screen)
+                let top = get_param(0, 1).saturating_sub(1) as usize;
+                let bottom = get_param(1, self.rows as u16).saturating_sub(1) as usize;
+                let max_row = self.rows.saturating_sub(1);
+                let top = top.min(max_row);
+                let bottom = bottom.min(max_row);
+                if top < bottom {
+                    self.scroll_region = Some((top, bottom));
+                } else {
+                    self.scroll_region = None;
+                }
+                // DECSTBM also homes the cursor
+                self.cursor_row = 0;
+                self.cursor_col = 0;
+            }
+            'S' => {
+                // Scroll Up (SU) - scroll content up within scroll region
+                if let Some((top, bottom)) = self.scroll_region {
+                    let n = get_param(0, 1) as usize;
+                    self.scroll_region_up(top, bottom, n);
+                }
+            }
+            'T' => {
+                // Scroll Down (SD) - scroll content down within scroll region
+                if let Some((top, bottom)) = self.scroll_region {
+                    let n = get_param(0, 1) as usize;
+                    self.scroll_region_down(top, bottom, n);
+                }
+            }
+            'L' => {
+                // Insert Lines (IL) - insert blank lines at cursor, push down within region
+                if let Some((_top, bottom)) = self.scroll_region {
+                    let n = get_param(0, 1) as usize;
+                    self.ensure_row(bottom);
+                    for _ in 0..n {
+                        if self.cursor_row <= bottom && bottom < self.lines.len() {
+                            self.lines.remove(bottom);
+                            self.lines.insert(self.cursor_row, Line::new());
+                        }
+                    }
+                }
+            }
+            'M' => {
+                // Delete Lines (DL) - delete lines at cursor, pull up within region
+                if let Some((_top, bottom)) = self.scroll_region {
+                    let n = get_param(0, 1) as usize;
+                    self.ensure_row(bottom);
+                    for _ in 0..n {
+                        if self.cursor_row <= bottom && self.cursor_row < self.lines.len() {
+                            self.lines.remove(self.cursor_row);
+                            self.lines.insert(bottom, Line::new());
+                        }
+                    }
                 }
             }
             'm' => {
@@ -446,9 +603,13 @@ impl Perform for TerminalState {
                     let mode = get_param(0, 0);
                     match mode {
                         1049 | 1047 | 47 => {
-                            // Alternate screen buffer: clear on enter
+                            // Alternate screen buffer
                             if action == 'h' {
+                                self.alternate_screen = true;
                                 self.clear_screen();
+                            } else {
+                                self.alternate_screen = false;
+                                self.scroll_region = None;
                             }
                         }
                         _ => {}

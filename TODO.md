@@ -20,3 +20,6 @@ Forward Shift-Tab from nested panex to parent so it can exit focus mode.
 ## Adaptive Edge-Scroll Speed
 During drag-to-select, measure how fast the cursor moved from one line to the edge before hitting the first/last line. Use that velocity to scale edge-scroll speed instead of a fixed interval.
 
+## Nested Selection Constraint
+Add a way to constrain selection to a grandchild app that runs from a child panex.
+

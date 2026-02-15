@@ -130,11 +130,20 @@ async fn run_app(
 
     let mut app = App::new(config.no_shift_tab, auto_copy);
     let mut event_stream = EventStream::new();
-    let mut last_size: Option<(u16, u16)> = None;
+    let mut last_size: Option<(u16, u16)> = Some((size.width, size.height));
     let mut pending_resize: Option<(u16, u16)> = None;
     let mut resize_deadline: Option<Instant> = None;
+    let mut last_selected: usize = 0;
 
     loop {
+        // Nudge resize when selected process changes (triggers SIGWINCH)
+        if app.selected_index != last_selected {
+            last_selected = app.selected_index;
+            if let Some(name) = pm.process_names().get(app.selected_index).cloned() {
+                pm.nudge_resize(&name);
+            }
+        }
+
         // Draw
         terminal.draw(|f| {
             let size = f.area();
@@ -218,8 +227,11 @@ async fn run_app(
 
         // Detect size change and schedule debounced resize
         if last_size != Some(current_size) {
-            pending_resize = Some(current_size);
-            resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
+            // Only push deadline forward if the size actually changed from what's pending
+            if pending_resize != Some(current_size) {
+                pending_resize = Some(current_size);
+                resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
+            }
             last_size = Some(current_size);
         }
 
@@ -245,9 +257,12 @@ async fn run_app(
             Some(Ok(event)) = event_stream.next() => {
                 if let Event::Key(_) | Event::Mouse(_) | Event::Resize(_, _) = event {
                     if let Some((cols, rows)) = input::handle_event(event, &mut app, &mut pm, visible_height, viewport_width) {
-                        // Schedule debounced resize
-                        pending_resize = Some((cols, rows));
-                        resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
+                        // Schedule debounced resize (only push deadline if size changed)
+                        let new_size = Some((cols, rows));
+                        if pending_resize != new_size {
+                            pending_resize = new_size;
+                            resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
+                        }
                     }
                 }
             }
@@ -267,9 +282,11 @@ async fn run_app(
                     }
                     AppEvent::Input(e) => {
                         if let Some((cols, rows)) = input::handle_event(e, &mut app, &mut pm, visible_height, viewport_width) {
-                            // Schedule debounced resize
-                            pending_resize = Some((cols, rows));
-                            resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
+                            let new_size = Some((cols, rows));
+                            if pending_resize != new_size {
+                                pending_resize = new_size;
+                                resize_deadline = Some(Instant::now() + RESIZE_DEBOUNCE);
+                            }
                         }
                     }
                     AppEvent::Tick => {}

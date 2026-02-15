@@ -188,6 +188,15 @@ impl ProcessManager {
         }
     }
 
+    /// Re-send PTY resize to a process (triggers SIGWINCH). Used on focus change.
+    pub fn nudge_resize(&self, name: &str) {
+        if let Some(process) = self.processes.get(name) {
+            if let Some(ref pty) = process.pty {
+                let _ = pty.resize(self.cols, self.rows);
+            }
+        }
+    }
+
     pub fn handle_output(&mut self, name: &str, gen: Generation, data: &[u8]) {
         if let Some(process) = self.processes.get_mut(name) {
             // Ignore events from old process instances
