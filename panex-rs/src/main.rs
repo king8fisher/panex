@@ -162,7 +162,7 @@ async fn run_app(
             .split(main_chunks[0]);
 
             // Process list
-            let process_list = ProcessList::new(&pm, app.selected_index, app.mode);
+            let process_list = ProcessList::new(&pm, app.selected_index);
             f.render_widget(process_list, content_chunks[0]);
 
             // Delimiter (clear the column so no artifacts bleed through)
@@ -183,7 +183,7 @@ async fn run_app(
 
             // Help popup
             if app.show_help {
-                f.render_widget(HelpPopup::new(), size);
+                f.render_widget(HelpPopup::new(app.help_scroll), size);
             }
 
             // Shutdown popup

@@ -7,11 +7,13 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Widget},
 };
 
-pub struct HelpPopup;
+pub struct HelpPopup {
+    scroll: u16,
+}
 
 impl HelpPopup {
-    pub fn new() -> Self {
-        Self
+    pub fn new(scroll: u16) -> Self {
+        Self { scroll }
     }
 }
 
@@ -86,6 +88,32 @@ impl Widget for HelpPopup {
                 Span::raw("Quit"),
             ]),
             Line::from(""),
+            Line::from(vec![
+                Span::styled("Mouse ", Style::default().add_modifier(Modifier::BOLD)),
+                InputMode::Browse.styled_label(),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Scroll     ", Style::default().fg(Color::Yellow)),
+                Span::raw("Scroll output"),
+            ]),
+            Line::from(vec![
+                Span::styled("Click left ", Style::default().fg(Color::Yellow)),
+                Span::raw("Select process"),
+            ]),
+            Line::from(vec![
+                Span::styled("Click right", Style::default().fg(Color::Yellow)),
+                Span::raw(" Enter focus mode"),
+            ]),
+            Line::from(vec![
+                Span::styled("Drag       ", Style::default().fg(Color::Yellow)),
+                Span::raw("Select text"),
+            ]),
+            Line::from(vec![
+                Span::styled("Alt/⌥+Drag ", Style::default().fg(Color::Yellow)),
+                Span::raw("Box select"),
+            ]),
+            Line::from(""),
             Line::from(vec![InputMode::Focus.styled_label()]),
             Line::from(""),
             Line::from(vec![
@@ -97,18 +125,26 @@ impl Widget for HelpPopup {
                 Span::raw("Exit focus mode"),
             ]),
             Line::from(""),
-            Line::from(vec![Span::styled(
-                "Mouse",
-                Style::default().add_modifier(Modifier::BOLD),
-            )]),
+            Line::from(vec![
+                Span::styled("Mouse ", Style::default().add_modifier(Modifier::BOLD)),
+                InputMode::Focus.styled_label(),
+            ]),
             Line::from(""),
             Line::from(vec![
-                Span::styled("Scroll    ", Style::default().fg(Color::Yellow)),
+                Span::styled("Click/Drag ", Style::default().fg(Color::Yellow)),
+                Span::raw("Forwarded to child process"),
+            ]),
+            Line::from(vec![
+                Span::styled("Scroll     ", Style::default().fg(Color::Yellow)),
                 Span::raw("Scroll output"),
             ]),
             Line::from(vec![
-                Span::styled("Click     ", Style::default().fg(Color::Yellow)),
-                Span::raw("Select process"),
+                Span::styled("Click left ", Style::default().fg(Color::Yellow)),
+                Span::raw("Exit focus, select process"),
+            ]),
+            Line::from(vec![
+                Span::styled("Click bar  ", Style::default().fg(Color::Yellow)),
+                Span::raw("Exit focus mode"),
             ]),
             Line::from(""),
             Line::from(vec![Span::styled(
@@ -117,13 +153,27 @@ impl Widget for HelpPopup {
             )]),
         ];
 
+        let total_lines = help_text.len() as u16;
+        // Inner height = popup height - 2 (top/bottom border)
+        let inner_height = popup_area.height.saturating_sub(2);
+        let max_scroll = total_lines.saturating_sub(inner_height);
+        let scroll = self.scroll.min(max_scroll);
+
+        let title_right = if max_scroll > 0 {
+            format!(" ↑↓ scroll ({}/{}) ", scroll + 1, max_scroll + 1)
+        } else {
+            String::new()
+        };
+
         let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::Cyan))
-            .title(" Help ");
+            .title(" Help ")
+            .title_bottom(Line::from(title_right).right_aligned());
 
         Paragraph::new(help_text)
             .block(block)
+            .scroll((scroll, 0))
             .render(popup_area, buf);
     }
 }

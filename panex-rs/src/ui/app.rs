@@ -1,9 +1,10 @@
+use crate::input::selection::BufferPos;
 use crate::input::SelectionState;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
 };
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
@@ -47,6 +48,7 @@ pub struct App {
     pub selected_index: usize,
     pub mode: InputMode,
     pub show_help: bool,
+    pub help_scroll: u16,
     pub should_quit: bool,
     pub shutting_down: bool,
     pub shutdown_start: Option<Instant>,
@@ -56,8 +58,13 @@ pub struct App {
     pub status_message: Option<(String, Instant)>,
     pub drag_edge: Option<DragEdge>,
     pub last_edge_scroll: Option<Instant>,
-    /// Mouse-down position pending selection (col, row) — selection starts after drag threshold
-    pub pending_click: Option<(u16, u16)>,
+    /// Adaptive edge-scroll interval derived from drag approach velocity
+    pub edge_scroll_interval: Duration,
+    /// Last drag row + timestamp for computing approach velocity
+    pub last_drag_row: Option<(u16, Instant)>,
+    /// Mouse-down position pending selection (screen_col, screen_row, buffer_pos, shift_held) —
+    /// buffer_pos is captured at click time so it survives auto-scroll changes
+    pub pending_click: Option<(u16, u16, BufferPos, bool)>,
 }
 
 impl App {
@@ -66,6 +73,7 @@ impl App {
             selected_index: 0,
             mode: InputMode::Browse,
             show_help: false,
+            help_scroll: 0,
             should_quit: false,
             shutting_down: false,
             shutdown_start: None,
@@ -75,6 +83,8 @@ impl App {
             status_message: None,
             drag_edge: None,
             last_edge_scroll: None,
+            edge_scroll_interval: Duration::from_millis(300),
+            last_drag_row: None,
             pending_click: None,
         }
     }
@@ -102,6 +112,9 @@ impl App {
 
     pub fn toggle_help(&mut self) {
         self.show_help = !self.show_help;
+        if self.show_help {
+            self.help_scroll = 0;
+        }
     }
 
     pub fn quit(&mut self) {

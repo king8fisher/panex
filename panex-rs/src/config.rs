@@ -10,10 +10,10 @@ impl ProcessStatus {
     pub fn icon(&self) -> &'static str {
         match self {
             ProcessStatus::Running => "●",
-            ProcessStatus::Exited(0) => "○",
+            ProcessStatus::Exited(0) => " ",
             ProcessStatus::Exited(_) => "✗",
             ProcessStatus::Failed(_) => "✗",
-            ProcessStatus::Stopped => "○",
+            ProcessStatus::Stopped => " ",
         }
     }
 

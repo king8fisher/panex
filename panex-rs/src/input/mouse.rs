@@ -1,20 +1,20 @@
 use crate::input::clipboard::copy_to_clipboard;
 use crate::input::selection::{
-    expand_to_word, extract_selected_text, screen_to_buffer, screen_to_buffer_wrapped,
+    clamp_pos, expand_to_word, extract_selected_text, screen_to_buffer, screen_to_buffer_wrapped,
     visual_to_buffer, BufferPos, SelectionPhase,
 };
 use crate::process::ProcessManager;
 use crate::ui::app::DragEdge;
 use crate::ui::output_panel::{scroll_down, scroll_up};
 use crate::ui::{App, InputMode};
-use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::time::{Duration, Instant};
 
 const SCROLL_AMOUNT: usize = 3;
+/// First column of the gutter (between process list and output panel)
+const GUTTER_START: u16 = 19;
 /// Left edge of output panel (process list width + delimiter)
 const OUTPUT_PANEL_X: u16 = 21;
-/// Columns that act as gutter between panels (last process list col + delimiter)
-const GUTTER_START: u16 = 19;
 /// Minimum cell distance before a drag becomes a selection
 const DRAG_THRESHOLD: u16 = 2;
 
@@ -55,17 +55,36 @@ pub fn handle_mouse(
     visible_height: usize,
     viewport_width: usize,
 ) {
+    // Help popup: scroll or close on click
+    if app.show_help {
+        match event.kind {
+            MouseEventKind::ScrollUp => {
+                app.help_scroll = app.help_scroll.saturating_sub(SCROLL_AMOUNT as u16);
+            }
+            MouseEventKind::ScrollDown => {
+                app.help_scroll = app.help_scroll.saturating_add(SCROLL_AMOUNT as u16);
+            }
+            MouseEventKind::Down(_) => {
+                app.show_help = false;
+            }
+            _ => {}
+        }
+        return;
+    }
+
     // In Focus mode, forward non-scroll mouse events to the child PTY.
     // Scroll wheel always stays with panex for viewport scrolling.
     if app.mode == InputMode::Focus {
         let is_scroll = matches!(event.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown);
 
         if !is_scroll {
-            // Click on process list exits focus
-            if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && event.column < GUTTER_START {
-                let index = event.row as usize;
-                if index < pm.process_count() {
-                    app.selected_index = index;
+            // Click on process list or gutter exits focus
+            if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && event.column < OUTPUT_PANEL_X {
+                if event.column < GUTTER_START {
+                    let index = event.row as usize;
+                    if index < pm.process_count() {
+                        app.selected_index = index;
+                    }
                 }
                 app.exit_focus();
                 return;
@@ -112,7 +131,7 @@ pub fn handle_mouse(
                 app.selection.clear();
                 app.pending_click = None;
             } else if event.column < GUTTER_START {
-                // Click on left panel - select process
+                // Click on process list (col 0–18) - select process
                 let index = event.row as usize;
                 if index < pm.process_count() {
                     app.selected_index = index;
@@ -120,15 +139,43 @@ pub fn handle_mouse(
                 app.exit_focus();
                 app.selection.clear();
                 app.pending_click = None;
-            } else {
-                // Click on gutter or output panel - record pending click
-                app.pending_click = Some((event.column, event.row));
+            } else if event.column < OUTPUT_PANEL_X {
+                // Click on gutter (col 19–20) - start line selection
                 app.selection.clear();
-
-                // Handle double/triple click immediately (word/line select)
+                app.pending_click = None;
                 if let Some(name) = &selected_name {
                     if let Some(process) = pm.get_process(name) {
                         let pos = if process.wrap_enabled {
+                            screen_to_buffer_wrapped(
+                                OUTPUT_PANEL_X,
+                                event.row,
+                                OUTPUT_PANEL_X,
+                                process.scroll_offset,
+                                process.buffer.get_all_lines(),
+                                viewport_width,
+                            )
+                        } else {
+                            screen_to_buffer(
+                                OUTPUT_PANEL_X,
+                                event.row,
+                                OUTPUT_PANEL_X,
+                                process.scroll_offset,
+                                viewport_width,
+                            )
+                        };
+                        let pos = clamp_pos(pos, process.buffer.get_all_lines());
+                        app.selection.start_visual(pos, true);
+                    }
+                }
+            } else {
+                // Click on gutter or output panel - compute buffer position NOW
+                // (before auto-scroll can shift scroll_offset between click and drag)
+                app.selection.clear();
+
+                let alt = event.modifiers.contains(KeyModifiers::ALT);
+                if let Some(name) = &selected_name {
+                    if let Some(process) = pm.get_process(name) {
+                        let raw_pos = if process.wrap_enabled {
                             screen_to_buffer_wrapped(
                                 event.column.max(OUTPUT_PANEL_X),
                                 event.row,
@@ -146,31 +193,42 @@ pub fn handle_mouse(
                                 viewport_width,
                             )
                         };
-                        app.selection
-                            .start_mouse_select(pos, event.column, event.row);
-
-                        // Double/triple click: selection starts immediately
-                        if app.selection.phase == SelectionPhase::Selected {
-                            app.pending_click = None; // Not a simple click
-                            if matches!(
-                                app.selection.mode,
-                                crate::input::selection::SelectionMode::Char
-                            ) {
-                                let (start, end) =
-                                    expand_to_word(pos, process.buffer.get_all_lines());
-                                app.selection.anchor = start;
-                                app.selection.cursor = end;
-                            }
+                        // Box selection keeps raw column; char/line selection clamps
+                        let pos = if alt {
+                            raw_pos
                         } else {
-                            // Single click: don't start selection yet, wait for drag threshold
-                            app.selection.clear();
+                            clamp_pos(raw_pos, process.buffer.get_all_lines())
+                        };
+                        // Save screen coords (for drag threshold) + buffer pos (for anchor)
+                        app.pending_click = Some((event.column, event.row, pos, alt));
+
+                        if !alt {
+                            app.selection
+                                .start_mouse_select(pos, event.column, event.row);
+
+                            // Double/triple click: selection starts immediately
+                            if app.selection.phase == SelectionPhase::Selected {
+                                app.pending_click = None; // Not a simple click
+                                if matches!(
+                                    app.selection.mode,
+                                    crate::input::selection::SelectionMode::Char
+                                ) {
+                                    let (start, end) =
+                                        expand_to_word(pos, process.buffer.get_all_lines());
+                                    app.selection.anchor = start;
+                                    app.selection.cursor = end;
+                                }
+                            } else {
+                                // Single click: don't start selection yet, wait for drag threshold
+                                app.selection.clear();
+                            }
                         }
                     }
                 }
             }
         }
         MouseEventKind::Drag(MouseButton::Left) => {
-            if let Some((click_col, click_row)) = app.pending_click {
+            if let Some((click_col, click_row, anchor_pos, box_select)) = app.pending_click {
                 // Check drag threshold
                 let dx = (event.column as i32 - click_col as i32).unsigned_abs() as u16;
                 let dy = (event.row as i32 - click_row as i32).unsigned_abs() as u16;
@@ -178,30 +236,13 @@ pub fn handle_mouse(
                     return; // Not far enough yet
                 }
 
-                // Threshold exceeded: start selection from the original click position
+                // Threshold exceeded: use buffer position captured at click time
+                // (immune to auto-scroll changes between click and drag)
                 app.pending_click = None;
-                if let Some(name) = &selected_name {
-                    if let Some(process) = pm.get_process(name) {
-                        let anchor_pos = if process.wrap_enabled {
-                            screen_to_buffer_wrapped(
-                                click_col.max(OUTPUT_PANEL_X),
-                                click_row,
-                                OUTPUT_PANEL_X,
-                                process.scroll_offset,
-                                process.buffer.get_all_lines(),
-                                viewport_width,
-                            )
-                        } else {
-                            screen_to_buffer(
-                                click_col.max(OUTPUT_PANEL_X),
-                                click_row,
-                                OUTPUT_PANEL_X,
-                                process.scroll_offset,
-                                viewport_width,
-                            )
-                        };
-                        app.selection.begin_drag(anchor_pos);
-                    }
+                if box_select {
+                    app.selection.begin_box_drag(anchor_pos);
+                } else {
+                    app.selection.begin_drag(anchor_pos);
                 }
             }
 
@@ -212,24 +253,41 @@ pub fn handle_mouse(
                 let row = event.row as usize;
 
                 // Set edge-scroll state (main loop handles timed scrolling)
-                if row == 0 {
-                    if app.drag_edge != Some(DragEdge::Top) {
-                        if let Some(process) = pm.get_process_mut(name) {
-                            scroll_up(process, 1);
-                        }
-                        app.last_edge_scroll = Some(Instant::now());
-                    }
-                    app.drag_edge = Some(DragEdge::Top);
+                let at_edge = if row == 0 {
+                    Some(DragEdge::Top)
                 } else if row >= visible_height {
-                    if app.drag_edge != Some(DragEdge::Bottom) {
+                    Some(DragEdge::Bottom)
+                } else {
+                    None
+                };
+
+                if let Some(edge) = at_edge {
+                    if app.drag_edge != Some(edge) {
+                        // Just entered edge — compute adaptive interval from approach velocity
+                        app.edge_scroll_interval = if let Some((prev_row, prev_time)) = app.last_drag_row {
+                            let dy = (event.row as i32 - prev_row as i32).unsigned_abs().max(1);
+                            let dt_ms = prev_time.elapsed().as_millis().max(1) as u32;
+                            // ms per row of cursor movement; clamp interval to 30..300ms
+                            let ms_per_row = dt_ms / dy;
+                            Duration::from_millis((ms_per_row * 2).clamp(30, 300) as u64)
+                        } else {
+                            EDGE_SCROLL_BASE
+                        };
+
+                        // Immediate first scroll
                         if let Some(process) = pm.get_process_mut(name) {
-                            scroll_down(process, 1, visible_height, viewport_width);
+                            match edge {
+                                DragEdge::Top => scroll_up(process, 1),
+                                DragEdge::Bottom => scroll_down(process, 1, visible_height, viewport_width),
+                            }
                         }
                         app.last_edge_scroll = Some(Instant::now());
                     }
-                    app.drag_edge = Some(DragEdge::Bottom);
+                    app.drag_edge = Some(edge);
+                    app.last_drag_row = None; // stop tracking while at edge
                 } else {
                     app.drag_edge = None;
+                    app.last_drag_row = Some((event.row, Instant::now()));
                 }
 
                 if let Some(process) = pm.get_process(name) {
@@ -247,7 +305,7 @@ pub fn handle_mouse(
                             let buf_row = last_row + process.scroll_offset;
                             BufferPos::new(buf_row, usize::MAX)
                         }
-                    } else if event.column <= GUTTER_START {
+                    } else if event.column < OUTPUT_PANEL_X {
                         // Dragging to gutter = end of previous line
                         if process.wrap_enabled {
                             let visual_row = clamped_row as usize + process.scroll_offset;
@@ -273,23 +331,31 @@ pub fn handle_mouse(
                                 BufferPos::new(0, 0)
                             }
                         }
-                    } else if process.wrap_enabled {
-                        screen_to_buffer_wrapped(
-                            event.column,
-                            clamped_row,
-                            OUTPUT_PANEL_X,
-                            process.scroll_offset,
-                            process.buffer.get_all_lines(),
-                            viewport_width,
-                        )
                     } else {
-                        screen_to_buffer(
-                            event.column,
-                            clamped_row,
-                            OUTPUT_PANEL_X,
-                            process.scroll_offset,
-                            viewport_width,
-                        )
+                        let raw = if process.wrap_enabled {
+                            screen_to_buffer_wrapped(
+                                event.column,
+                                clamped_row,
+                                OUTPUT_PANEL_X,
+                                process.scroll_offset,
+                                process.buffer.get_all_lines(),
+                                viewport_width,
+                            )
+                        } else {
+                            screen_to_buffer(
+                                event.column,
+                                clamped_row,
+                                OUTPUT_PANEL_X,
+                                process.scroll_offset,
+                                viewport_width,
+                            )
+                        };
+                        // Box selection keeps raw columns for rectangular shape
+                        if app.selection.mode == crate::input::selection::SelectionMode::Box {
+                            raw
+                        } else {
+                            clamp_pos(raw, process.buffer.get_all_lines())
+                        }
                     };
                     app.selection.update_mouse_drag(pos);
                 }
@@ -297,6 +363,7 @@ pub fn handle_mouse(
         }
         MouseEventKind::Up(MouseButton::Left) => {
             app.drag_edge = None;
+            app.last_drag_row = None;
 
             if app.pending_click.is_some() {
                 // Click without exceeding drag threshold → enter focus
@@ -331,7 +398,7 @@ pub fn handle_mouse(
     }
 }
 
-const EDGE_SCROLL_INTERVAL: Duration = Duration::from_millis(300);
+const EDGE_SCROLL_BASE: Duration = Duration::from_millis(300);
 
 /// Called from the main loop on periodic tick to continue edge-scrolling
 pub fn tick_edge_scroll(
@@ -347,7 +414,7 @@ pub fn tick_edge_scroll(
 
     let due = app
         .last_edge_scroll
-        .map(|t| t.elapsed() >= EDGE_SCROLL_INTERVAL)
+        .map(|t| t.elapsed() >= app.edge_scroll_interval)
         .unwrap_or(true);
     if !due {
         return;

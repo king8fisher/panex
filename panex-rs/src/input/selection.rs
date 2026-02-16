@@ -4,6 +4,8 @@ use std::time::Instant;
 pub enum SelectionMode {
     Char,
     Line,
+    /// Rectangular (column) selection
+    Box,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -129,6 +131,14 @@ impl SelectionState {
         self.phase = SelectionPhase::Selecting;
     }
 
+    /// Begin a box (rectangular) drag selection
+    pub fn begin_box_drag(&mut self, anchor: BufferPos) {
+        self.mode = SelectionMode::Box;
+        self.anchor = anchor;
+        self.cursor = anchor;
+        self.phase = SelectionPhase::Selecting;
+    }
+
     pub fn update_mouse_drag(&mut self, pos: BufferPos) {
         if self.phase == SelectionPhase::Selecting {
             self.cursor = pos;
@@ -190,6 +200,14 @@ impl SelectionState {
                 }
             }
             SelectionMode::Line => row >= start.row && row <= end.row,
+            SelectionMode::Box => {
+                let (min_col, max_col) = if self.anchor.col <= self.cursor.col {
+                    (self.anchor.col, self.cursor.col)
+                } else {
+                    (self.cursor.col, self.anchor.col)
+                };
+                row >= start.row && row <= end.row && col >= min_col && col <= max_col
+            }
         }
     }
 }
@@ -232,13 +250,24 @@ pub fn visual_to_buffer(
         if visual_row < visual + n_visual {
             let chunk_index = visual_row - visual;
             let col = chunk_index * viewport_width + visual_col;
+            // Clamp column to actual line length
+            let col = if line.cells.is_empty() {
+                0
+            } else {
+                col.min(line.cells.len() - 1)
+            };
             return BufferPos::new(row_idx, col);
         }
         visual += n_visual;
     }
     // Clamp to last buffer line
     let last = content_count.saturating_sub(1);
-    BufferPos::new(last, visual_col)
+    let col = if last < buffer.len() && !buffer[last].cells.is_empty() {
+        visual_col.min(buffer[last].cells.len() - 1)
+    } else {
+        0
+    };
+    BufferPos::new(last, col)
 }
 
 /// Map screen coordinates to buffer position in wrap mode.
@@ -263,6 +292,24 @@ pub fn visual_row_to_buffer_row(
     viewport_width: usize,
 ) -> BufferPos {
     visual_to_buffer(visual_row, 0, buffer, viewport_width)
+}
+
+/// Clamp a buffer position so row is within content and col within line cells.
+pub fn clamp_pos(
+    pos: BufferPos,
+    buffer: &std::collections::VecDeque<crate::process::buffer::Line>,
+) -> BufferPos {
+    if buffer.is_empty() {
+        return BufferPos::new(0, 0);
+    }
+    let content_count = content_line_count(buffer);
+    let row = pos.row.min(content_count.saturating_sub(1));
+    let col = if buffer[row].cells.is_empty() {
+        0
+    } else {
+        pos.col.min(buffer[row].cells.len() - 1)
+    };
+    BufferPos::new(row, col)
 }
 
 /// Count buffer lines excluding trailing empty ones (mirrors output_panel logic).
@@ -292,15 +339,25 @@ pub fn extract_selected_text(
         }
         let line = &buffer[row];
 
-        let col_start = if row == start.row && selection.mode == SelectionMode::Char {
-            start.col
-        } else {
-            0
-        };
-        let col_end = if row == end.row && selection.mode == SelectionMode::Char {
-            end.col.saturating_add(1)
-        } else {
-            line.cells.len()
+        let (col_start, col_end) = match selection.mode {
+            SelectionMode::Char => {
+                let cs = if row == start.row { start.col } else { 0 };
+                let ce = if row == end.row {
+                    end.col.saturating_add(1)
+                } else {
+                    line.cells.len()
+                };
+                (cs, ce)
+            }
+            SelectionMode::Box => {
+                let (min_col, max_col) = if selection.anchor.col <= selection.cursor.col {
+                    (selection.anchor.col, selection.cursor.col)
+                } else {
+                    (selection.cursor.col, selection.anchor.col)
+                };
+                (min_col, max_col.saturating_add(1))
+            }
+            SelectionMode::Line => (0, line.cells.len()),
         };
 
         let col_end = col_end.min(line.cells.len());

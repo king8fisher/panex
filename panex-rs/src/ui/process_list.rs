@@ -1,6 +1,5 @@
 use crate::config::ProcessStatus;
 use crate::process::ProcessManager;
-use crate::ui::InputMode;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -27,15 +26,13 @@ fn strip_suffixes(name: &str) -> &str {
 pub struct ProcessList<'a> {
     manager: &'a ProcessManager,
     selected: usize,
-    mode: InputMode,
 }
 
 impl<'a> ProcessList<'a> {
-    pub fn new(manager: &'a ProcessManager, selected: usize, mode: InputMode) -> Self {
+    pub fn new(manager: &'a ProcessManager, selected: usize) -> Self {
         Self {
             manager,
             selected,
-            mode,
         }
     }
 }
@@ -60,19 +57,16 @@ impl Widget for ProcessList<'_> {
                 let pin = if !process.auto_scroll { "⇅" } else { " " };
 
                 let is_selected = i == self.selected;
-                let bg_color = if is_selected {
-                    match self.mode {
-                        InputMode::Browse => Color::Blue,
-                        InputMode::Focus => Color::DarkGray,
-                    }
-                } else {
-                    Color::Reset
-                };
-
                 let is_stopped = matches!(
                     process.status,
                     ProcessStatus::Stopped | ProcessStatus::Exited(_) | ProcessStatus::Failed(_)
                 );
+
+                let bg_color = if is_selected {
+                    Color::DarkGray
+                } else {
+                    Color::Reset
+                };
 
                 let style = Style::default().bg(bg_color);
                 let name_style = if is_selected {

@@ -28,9 +28,25 @@ pub fn handle_event(
 }
 
 fn handle_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_height: usize, viewport_width: usize) {
-    // Close help on any key
+    // Help popup: scroll or close
     if app.show_help {
-        app.show_help = false;
+        match key.code {
+            KeyCode::Down | KeyCode::Char('j') => {
+                app.help_scroll = app.help_scroll.saturating_add(1);
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                app.help_scroll = app.help_scroll.saturating_sub(1);
+            }
+            KeyCode::PageDown => {
+                app.help_scroll = app.help_scroll.saturating_add(10);
+            }
+            KeyCode::PageUp => {
+                app.help_scroll = app.help_scroll.saturating_sub(10);
+            }
+            _ => {
+                app.show_help = false;
+            }
+        }
         return;
     }
 

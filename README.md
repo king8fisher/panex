@@ -89,12 +89,11 @@ panex --no-auto-copy "npm run api" "npm run web"
 | Left panel   | Exit focus, select item |
 | Right panel  | Enter focus mode        |
 | Drag         | Select text (auto-copy) |
-| Double-click | Select word             |
-| Triple-click | Select line             |
+| Alt/⌥+Drag   | Box (rectangular) select|
 | Status bar   | Exit focus mode         |
 | Scroll wheel | Scroll output           |
 
-**Focus mode:** All mouse events (click, drag, scroll) on the output panel are forwarded to the child process as SGR escape sequences. Click the left panel or status bar to exit focus.
+**Focus mode:** All mouse events (click, drag, scroll) on the output panel are forwarded to the child process as SGR escape sequences. Text selection is only available in Browse mode — exit focus first (click left panel, status bar, or press Esc).
 
 ## Why panex?
 
