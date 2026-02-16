@@ -53,8 +53,15 @@ impl Widget for ProcessList<'_> {
                 let process = self.manager.get_process(name).unwrap();
                 let icon = process.status.icon();
                 let status_color = process.status.color();
-                let wrap = if process.wrap_enabled { "w" } else { " " };
-                let pin = if !process.auto_scroll { "⇅" } else { " " };
+                let wrap = if process.wrap_enabled { "↩" } else { " " };
+                let is_alt = process.buffer.is_alternate_screen();
+                let pin = if is_alt {
+                    "⊡" // alternate screen (TUI app)
+                } else if !process.auto_scroll {
+                    "⇡" // pinned (scrolled up)
+                } else {
+                    "↓" // following output
+                };
 
                 let is_selected = i == self.selected;
                 let is_stopped = matches!(
@@ -77,9 +84,9 @@ impl Widget for ProcessList<'_> {
                     style
                 };
 
-                // Calculate padding: icon(2) + name + spaces + wrap(1) + pin(2)
+                // Calculate padding: icon(2) + name + spaces + wrap(1) + pin(1)
                 let icon_width = 2; // icon + space
-                let indicators_width = 3; // wrap(1) + pin(2 for emoji width)
+                let indicators_width = 2; // wrap(1) + pin(1)
                 let name_max = width.saturating_sub(icon_width + indicators_width);
                 let stripped_name = strip_suffixes(name);
                 let display_name: String = stripped_name.chars().take(name_max).collect();
@@ -92,10 +99,12 @@ impl Widget for ProcessList<'_> {
                     style
                 };
 
-                let pin_style = if !process.auto_scroll {
-                    Style::default().fg(Color::White).bg(Color::Red)
+                let pin_style = if is_alt {
+                    Style::default().fg(Color::LightGreen).bg(bg_color)
+                } else if !process.auto_scroll {
+                    Style::default().fg(Color::DarkGray).bg(Color::Yellow)
                 } else {
-                    style
+                    Style::default().fg(Color::LightBlue).bg(bg_color)
                 };
 
                 let line = Line::from(vec![

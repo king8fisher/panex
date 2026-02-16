@@ -73,11 +73,9 @@ pub fn handle_mouse(
     }
 
     // In Focus mode, forward non-scroll mouse events to the child PTY.
-    // Scroll wheel always stays with panex for viewport scrolling.
+    // Scroll is handled uniformly below (forwarded if alternate screen, else viewport).
     if app.mode == InputMode::Focus {
-        let is_scroll = matches!(event.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown);
-
-        if !is_scroll {
+        if !matches!(event.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
             // Click on process list or gutter exits focus
             if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && event.column < OUTPUT_PANEL_X {
                 if event.column < GUTTER_START {
@@ -103,23 +101,26 @@ pub fn handle_mouse(
             }
             return;
         }
-        // Scroll events fall through to normal handling below
     }
 
     let selected_name = pm.process_names().get(app.selected_index).cloned();
 
     match event.kind {
-        MouseEventKind::ScrollUp => {
-            if let Some(name) = selected_name {
-                if let Some(process) = pm.get_process_mut(&name) {
-                    scroll_up(process, SCROLL_AMOUNT);
-                }
-            }
-        }
-        MouseEventKind::ScrollDown => {
-            if let Some(name) = selected_name {
-                if let Some(process) = pm.get_process_mut(&name) {
-                    scroll_down(process, SCROLL_AMOUNT, visible_height, viewport_width);
+        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+            if let Some(name) = &selected_name {
+                if let Some(process) = pm.get_process(name) {
+                    if process.buffer.is_alternate_screen() {
+                        // TUI app: forward scroll to child PTY
+                        if let Some(bytes) = mouse_to_sgr(&event, visible_height) {
+                            let _ = pm.write_to_process(name, &bytes);
+                        }
+                    } else if matches!(event.kind, MouseEventKind::ScrollUp) {
+                        if let Some(process) = pm.get_process_mut(name) {
+                            scroll_up(process, SCROLL_AMOUNT);
+                        }
+                    } else if let Some(process) = pm.get_process_mut(name) {
+                        scroll_down(process, SCROLL_AMOUNT, visible_height, viewport_width);
+                    }
                 }
             }
         }

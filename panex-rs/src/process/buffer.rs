@@ -93,6 +93,10 @@ impl TerminalBuffer {
         &self.state.lines
     }
 
+    pub fn is_alternate_screen(&self) -> bool {
+        self.state.alternate_screen
+    }
+
     pub fn take_pending_responses(&mut self) -> Vec<Vec<u8>> {
         std::mem::take(&mut self.state.pending_responses)
     }
