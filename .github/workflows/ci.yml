@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo registry & target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            panex-rs/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('panex-rs/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Lint (clippy)
+        run: cargo clippy -- -D warnings
+        working-directory: panex-rs
+
+      - name: Format check
+        run: cargo fmt -- --check
+        working-directory: panex-rs
+
+      - name: Test
+        run: cargo test
+        working-directory: panex-rs
+
+      - name: Build (release)
+        run: cargo build --release
+        working-directory: panex-rs
