@@ -7,6 +7,12 @@ use ratatui::{
 };
 use std::time::{Duration, Instant};
 
+#[derive(Debug, Clone)]
+pub enum RestartAction {
+    One(String),
+    All,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
     Browse,
@@ -68,6 +74,8 @@ pub struct App {
     pub pending_click: Option<(u16, u16, BufferPos, bool)>,
     /// Search state for scrollback search
     pub search: SearchState,
+    /// Restart popup state — shown for one frame, then cleared
+    pub restarting: Option<RestartAction>,
 }
 
 impl App {
@@ -90,6 +98,7 @@ impl App {
             last_drag_row: None,
             pending_click: None,
             search: SearchState::default(),
+            restarting: None,
         }
     }
 

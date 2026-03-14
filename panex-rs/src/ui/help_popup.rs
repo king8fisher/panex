@@ -1,3 +1,4 @@
+use crate::ui::app::RestartAction;
 use crate::ui::InputMode;
 use ratatui::{
     buffer::Buffer,
@@ -229,6 +230,45 @@ impl Widget for ShutdownPopup {
                 Style::default().fg(Color::Yellow),
             )),
             Line::from(format!("  {}  ", status)),
+        ];
+        Paragraph::new(text).block(block).render(popup_area, buf);
+    }
+}
+
+pub struct RestartPopup {
+    message: String,
+}
+
+impl RestartPopup {
+    pub fn new(action: &RestartAction) -> Self {
+        let message = match action {
+            RestartAction::One(name) => format!("Restarting {}...", name),
+            RestartAction::All => "Restarting all...".to_string(),
+        };
+        Self { message }
+    }
+}
+
+impl Widget for RestartPopup {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let popup_width = (self.message.len() + 6) as u16;
+        let popup_height = 5;
+        let x = area.x + (area.width.saturating_sub(popup_width)) / 2;
+        let y = area.y + (area.height.saturating_sub(popup_height)) / 2;
+        let popup_area = Rect::new(x, y, popup_width, popup_height);
+
+        Clear.render(popup_area, buf);
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow));
+
+        let text = vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                format!(" {} ", self.message),
+                Style::default().fg(Color::Yellow),
+            )),
         ];
         Paragraph::new(text).block(block).render(popup_area, buf);
     }

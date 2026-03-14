@@ -27,7 +27,7 @@ use tokio::sync::mpsc;
 
 const RESIZE_DEBOUNCE: Duration = Duration::from_millis(50);
 use ui::{
-    help_popup::{HelpPopup, ShutdownPopup},
+    help_popup::{HelpPopup, RestartPopup, ShutdownPopup},
     output_panel::OutputPanel,
     process_list::ProcessList,
     status_bar::StatusBar,
@@ -227,7 +227,17 @@ async fn run_app(
                     .unwrap_or(config.timeout);
                 f.render_widget(ShutdownPopup::new(stopped, total, remaining_ms), size);
             }
+
+            // Restart popup
+            if let Some(ref action) = app.restarting {
+                f.render_widget(RestartPopup::new(action), size);
+            }
         })?;
+
+        // Clear restart popup after one render frame
+        if app.restarting.is_some() {
+            app.restarting = None;
+        }
 
         // Handle shutdown progression
         if app.shutting_down {
