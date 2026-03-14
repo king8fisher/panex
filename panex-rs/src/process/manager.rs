@@ -21,12 +21,12 @@ pub struct ManagedProcess {
 }
 
 impl ManagedProcess {
-    pub fn new(config: ProcessConfig, cols: usize, rows: usize) -> Self {
+    pub fn new(config: ProcessConfig, cols: usize, rows: usize, max_scrollback: usize) -> Self {
         let wrap_enabled = config.wrap_enabled;
         Self {
             config,
             status: ProcessStatus::Stopped,
-            buffer: TerminalBuffer::new(cols, rows),
+            buffer: TerminalBuffer::with_max_scrollback(cols, rows, max_scrollback),
             pty: None,
             scroll_offset: 0,
             auto_scroll: true,
@@ -44,6 +44,7 @@ pub struct ProcessManager {
     cols: u16,
     rows: u16,
     timeout: u64,
+    buffer_size: usize,
 }
 
 impl ProcessManager {
@@ -52,6 +53,7 @@ impl ProcessManager {
         cols: u16,
         rows: u16,
         timeout: u64,
+        buffer_size: usize,
     ) -> Self {
         Self {
             processes: HashMap::new(),
@@ -60,12 +62,13 @@ impl ProcessManager {
             cols,
             rows,
             timeout,
+            buffer_size,
         }
     }
 
     pub fn add_process(&mut self, config: ProcessConfig) {
         let name = config.name.clone();
-        let process = ManagedProcess::new(config, self.cols as usize, self.rows as usize);
+        let process = ManagedProcess::new(config, self.cols as usize, self.rows as usize, self.buffer_size);
         self.processes.insert(name.clone(), process);
         self.process_order.push(name);
     }

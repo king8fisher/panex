@@ -42,6 +42,7 @@ pub struct PanexConfig {
     pub processes: Vec<ProcessConfig>,
     pub no_shift_tab: bool,
     pub timeout: u64,
+    pub buffer_size: usize,
 }
 
 impl PanexConfig {
@@ -50,6 +51,7 @@ impl PanexConfig {
         names: Option<String>,
         no_shift_tab: bool,
         timeout: u64,
+        buffer_size: usize,
     ) -> Self {
         let name_list: Vec<String> = names
             .map(|n| n.split(',').map(|s| s.trim().to_string()).collect())
@@ -95,6 +97,7 @@ impl PanexConfig {
             processes,
             no_shift_tab,
             timeout,
+            buffer_size,
         }
     }
 }

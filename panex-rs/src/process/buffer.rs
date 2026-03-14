@@ -2,7 +2,7 @@ use ratatui::style::{Color, Modifier, Style};
 use std::collections::VecDeque;
 use vte::{Params, Perform};
 
-const MAX_SCROLLBACK: usize = 10_000;
+pub const DEFAULT_MAX_SCROLLBACK: usize = 10_000;
 const MAX_LINE_WIDTH: usize = 2000; // Max column to prevent runaway memory allocation
 
 #[derive(Debug, Clone, Default)]
@@ -39,6 +39,7 @@ struct TerminalState {
     cursor_col: usize,
     cols: usize,
     rows: usize,
+    max_scrollback: usize,
     current_style: Style,
     saved_cursor: Option<(usize, usize)>,
     pending_responses: Vec<Vec<u8>>,
@@ -50,9 +51,14 @@ struct TerminalState {
 }
 
 impl TerminalBuffer {
+    #[allow(dead_code)] // Used by lib crate (integration tests), not the binary
     pub fn new(cols: usize, rows: usize) -> Self {
+        Self::with_max_scrollback(cols, rows, DEFAULT_MAX_SCROLLBACK)
+    }
+
+    pub fn with_max_scrollback(cols: usize, rows: usize, max_scrollback: usize) -> Self {
         Self {
-            state: TerminalState::new(cols, rows),
+            state: TerminalState::new(cols, rows, max_scrollback),
             parser: vte::Parser::new(),
         }
     }
@@ -122,8 +128,8 @@ impl TerminalBuffer {
 }
 
 impl TerminalState {
-    fn new(cols: usize, rows: usize) -> Self {
-        let mut lines = VecDeque::with_capacity(MAX_SCROLLBACK);
+    fn new(cols: usize, rows: usize, max_scrollback: usize) -> Self {
+        let mut lines = VecDeque::with_capacity(max_scrollback.min(1024));
         lines.push_back(Line::new());
         Self {
             lines,
@@ -131,6 +137,7 @@ impl TerminalState {
             cursor_col: 0,
             cols,
             rows,
+            max_scrollback,
             current_style: Style::default(),
             saved_cursor: None,
             pending_responses: Vec::new(),
@@ -152,7 +159,7 @@ impl TerminalState {
         }
         // Trim if over max scrollback (only relevant in normal mode)
         if !self.alternate_screen {
-            while self.lines.len() > MAX_SCROLLBACK {
+            while self.lines.len() > self.max_scrollback {
                 self.lines.pop_front();
                 if self.cursor_row > 0 {
                     self.cursor_row -= 1;

@@ -58,6 +58,10 @@ struct Cli {
     /// Graceful shutdown timeout in ms before force kill (default: 500)
     #[arg(short = 't', long, default_value = "500")]
     timeout: u64,
+
+    /// Maximum scrollback lines per process (default: 10000)
+    #[arg(short = 'b', long, default_value_t = process::buffer::DEFAULT_MAX_SCROLLBACK)]
+    buffer_size: usize,
 }
 
 #[tokio::main]
@@ -69,7 +73,7 @@ async fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    let config = PanexConfig::from_args(cli.commands, cli.names, cli.no_shift_tab, cli.timeout);
+    let config = PanexConfig::from_args(cli.commands, cli.names, cli.no_shift_tab, cli.timeout, cli.buffer_size);
     let auto_copy = !cli.no_auto_copy;
 
     run(config, auto_copy).await
@@ -118,7 +122,7 @@ async fn run_app(
     // Output panel width = total - process list (20) - delimiter (1)
     let output_cols = size.width.saturating_sub(21);
     let output_rows = size.height.saturating_sub(1); // -1 for status bar
-    let mut pm = ProcessManager::new(event_tx.clone(), output_cols, output_rows, config.timeout);
+    let mut pm = ProcessManager::new(event_tx.clone(), output_cols, output_rows, config.timeout, config.buffer_size);
 
     // Add processes
     for proc_config in &config.processes {
