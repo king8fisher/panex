@@ -30,10 +30,7 @@ pub struct ProcessList<'a> {
 
 impl<'a> ProcessList<'a> {
     pub fn new(manager: &'a ProcessManager, selected: usize) -> Self {
-        Self {
-            manager,
-            selected,
-        }
+        Self { manager, selected }
     }
 }
 

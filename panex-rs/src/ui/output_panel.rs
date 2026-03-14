@@ -17,8 +17,16 @@ pub struct OutputPanel<'a> {
 }
 
 impl<'a> OutputPanel<'a> {
-    pub fn new(process: Option<&'a ManagedProcess>, mode: InputMode, selection: &'a SelectionState) -> Self {
-        Self { process, mode, selection }
+    pub fn new(
+        process: Option<&'a ManagedProcess>,
+        mode: InputMode,
+        selection: &'a SelectionState,
+    ) -> Self {
+        Self {
+            process,
+            mode,
+            selection,
+        }
     }
 }
 
@@ -69,7 +77,11 @@ impl Widget for OutputPanel<'_> {
                     let start = process.scroll_offset.min(total_lines.saturating_sub(1));
                     let end = (start + inner_height).min(total_lines);
 
-                    wrapped_lines.into_iter().skip(start).take(end - start).collect()
+                    wrapped_lines
+                        .into_iter()
+                        .skip(start)
+                        .take(end - start)
+                        .collect()
                 } else {
                     // Normal mode: truncate lines at viewport width
                     let total_lines = process.buffer.content_line_count();
@@ -115,20 +127,27 @@ fn display_line_count(process: &ManagedProcess, viewport_width: usize) -> usize 
         let buffer = process.buffer.get_all_lines();
         // Exclude trailing empty lines (consistent with content_line_count)
         let content_count = content_buffer_line_count(buffer);
-        buffer.iter().take(content_count).map(|line| {
-            if line.cells.is_empty() {
-                1
-            } else {
-                line.cells.len().div_ceil(viewport_width)
-            }
-        }).sum::<usize>().max(1)
+        buffer
+            .iter()
+            .take(content_count)
+            .map(|line| {
+                if line.cells.is_empty() {
+                    1
+                } else {
+                    line.cells.len().div_ceil(viewport_width)
+                }
+            })
+            .sum::<usize>()
+            .max(1)
     } else {
         process.buffer.content_line_count()
     }
 }
 
 /// Count buffer lines excluding trailing empty ones
-fn content_buffer_line_count(buffer: &std::collections::VecDeque<crate::process::buffer::Line>) -> usize {
+fn content_buffer_line_count(
+    buffer: &std::collections::VecDeque<crate::process::buffer::Line>,
+) -> usize {
     let mut count = buffer.len();
     while count > 0 && buffer[count - 1].cells.is_empty() {
         count -= 1;
@@ -141,7 +160,12 @@ pub fn scroll_up(process: &mut ManagedProcess, amount: usize) {
     process.auto_scroll = false;
 }
 
-pub fn scroll_down(process: &mut ManagedProcess, amount: usize, visible_height: usize, viewport_width: usize) {
+pub fn scroll_down(
+    process: &mut ManagedProcess,
+    amount: usize,
+    visible_height: usize,
+    viewport_width: usize,
+) {
     let total = display_line_count(process, viewport_width);
     let max_scroll = total.saturating_sub(visible_height);
     process.scroll_offset = (process.scroll_offset + amount).min(max_scroll);
@@ -157,7 +181,11 @@ pub fn scroll_to_top(process: &mut ManagedProcess) {
     process.auto_scroll = false;
 }
 
-pub fn scroll_to_bottom(process: &mut ManagedProcess, visible_height: usize, viewport_width: usize) {
+pub fn scroll_to_bottom(
+    process: &mut ManagedProcess,
+    visible_height: usize,
+    viewport_width: usize,
+) {
     let total = display_line_count(process, viewport_width);
     let max_scroll = total.saturating_sub(visible_height);
     process.scroll_offset = max_scroll;

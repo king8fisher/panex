@@ -1,5 +1,7 @@
 use crate::input::clipboard::copy_to_clipboard;
-use crate::input::selection::{extract_selected_text, visual_row_to_buffer_row, BufferPos, SelectionPhase};
+use crate::input::selection::{
+    extract_selected_text, visual_row_to_buffer_row, BufferPos, SelectionPhase,
+};
 use crate::process::ProcessManager;
 use crate::ui::output_panel::{scroll_down, scroll_to_bottom, scroll_to_top, scroll_up};
 use crate::ui::{App, InputMode};
@@ -27,7 +29,13 @@ pub fn handle_event(
     }
 }
 
-fn handle_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_height: usize, viewport_width: usize) {
+fn handle_key(
+    key: KeyEvent,
+    app: &mut App,
+    pm: &mut ProcessManager,
+    visible_height: usize,
+    viewport_width: usize,
+) {
     // Help popup: scroll or close
     if app.show_help {
         match key.code {
@@ -56,7 +64,13 @@ fn handle_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_hei
     }
 }
 
-fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visible_height: usize, viewport_width: usize) {
+fn handle_browse_key(
+    key: KeyEvent,
+    app: &mut App,
+    pm: &mut ProcessManager,
+    visible_height: usize,
+    viewport_width: usize,
+) {
     let count = pm.process_count();
     let selected_name = pm.process_names().get(app.selected_index).cloned();
 
@@ -64,7 +78,8 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
     if app.selection.is_active() {
         // Ctrl-C with active selection = copy (not quit)
         let is_copy = matches!(key.code, KeyCode::Char('y') | KeyCode::Enter)
-            || (matches!(key.code, KeyCode::Char('c')) && key.modifiers.contains(KeyModifiers::CONTROL));
+            || (matches!(key.code, KeyCode::Char('c'))
+                && key.modifiers.contains(KeyModifiers::CONTROL));
 
         match key.code {
             KeyCode::Esc => {
@@ -75,10 +90,8 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
                 // Copy selection to clipboard
                 if let Some(name) = &selected_name {
                     if let Some(process) = pm.get_process(name) {
-                        let text = extract_selected_text(
-                            &app.selection,
-                            process.buffer.get_all_lines(),
-                        );
+                        let text =
+                            extract_selected_text(&app.selection, process.buffer.get_all_lines());
                         if !text.is_empty() && copy_to_clipboard(&text) {
                             app.set_status("Copied!");
                         }
@@ -92,7 +105,8 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
                 if app.selection.phase == SelectionPhase::Selecting {
                     let cur = app.selection.cursor;
                     if cur.row > 0 {
-                        app.selection.move_cursor(BufferPos::new(cur.row - 1, cur.col));
+                        app.selection
+                            .move_cursor(BufferPos::new(cur.row - 1, cur.col));
                     }
                 }
                 return;
@@ -100,7 +114,8 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
             KeyCode::Down | KeyCode::Char('j') => {
                 if app.selection.phase == SelectionPhase::Selecting {
                     let cur = app.selection.cursor;
-                    app.selection.move_cursor(BufferPos::new(cur.row + 1, cur.col));
+                    app.selection
+                        .move_cursor(BufferPos::new(cur.row + 1, cur.col));
                 }
                 return;
             }
@@ -108,7 +123,8 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
                 if app.selection.phase == SelectionPhase::Selecting {
                     let cur = app.selection.cursor;
                     if cur.col > 0 {
-                        app.selection.move_cursor(BufferPos::new(cur.row, cur.col - 1));
+                        app.selection
+                            .move_cursor(BufferPos::new(cur.row, cur.col - 1));
                     }
                 }
                 return;
@@ -116,7 +132,8 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
             KeyCode::Right | KeyCode::Char('l') => {
                 if app.selection.phase == SelectionPhase::Selecting {
                     let cur = app.selection.cursor;
-                    app.selection.move_cursor(BufferPos::new(cur.row, cur.col + 1));
+                    app.selection
+                        .move_cursor(BufferPos::new(cur.row, cur.col + 1));
                 }
                 return;
             }
@@ -171,7 +188,11 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
                 if let Some(process) = pm.get_process(name) {
                     // Start char-wise visual at top-left of visible area
                     let pos = if process.wrap_enabled {
-                        visual_row_to_buffer_row(process.scroll_offset, process.buffer.get_all_lines(), viewport_width)
+                        visual_row_to_buffer_row(
+                            process.scroll_offset,
+                            process.buffer.get_all_lines(),
+                            viewport_width,
+                        )
                     } else {
                         BufferPos::new(process.scroll_offset, 0)
                     };
@@ -184,7 +205,11 @@ fn handle_browse_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager, visi
                 if let Some(process) = pm.get_process(name) {
                     // Start line-wise visual at current scroll position
                     let pos = if process.wrap_enabled {
-                        visual_row_to_buffer_row(process.scroll_offset, process.buffer.get_all_lines(), viewport_width)
+                        visual_row_to_buffer_row(
+                            process.scroll_offset,
+                            process.buffer.get_all_lines(),
+                            viewport_width,
+                        )
                     } else {
                         BufferPos::new(process.scroll_offset, 0)
                     };
@@ -309,23 +334,21 @@ fn key_to_bytes(key: KeyEvent) -> Option<Vec<u8>> {
         KeyCode::PageUp => vec![0x1b, b'[', b'5', b'~'],
         KeyCode::PageDown => vec![0x1b, b'[', b'6', b'~'],
         KeyCode::Insert => vec![0x1b, b'[', b'2', b'~'],
-        KeyCode::F(n) => {
-            match n {
-                1 => vec![0x1b, b'O', b'P'],
-                2 => vec![0x1b, b'O', b'Q'],
-                3 => vec![0x1b, b'O', b'R'],
-                4 => vec![0x1b, b'O', b'S'],
-                5 => vec![0x1b, b'[', b'1', b'5', b'~'],
-                6 => vec![0x1b, b'[', b'1', b'7', b'~'],
-                7 => vec![0x1b, b'[', b'1', b'8', b'~'],
-                8 => vec![0x1b, b'[', b'1', b'9', b'~'],
-                9 => vec![0x1b, b'[', b'2', b'0', b'~'],
-                10 => vec![0x1b, b'[', b'2', b'1', b'~'],
-                11 => vec![0x1b, b'[', b'2', b'3', b'~'],
-                12 => vec![0x1b, b'[', b'2', b'4', b'~'],
-                _ => return None,
-            }
-        }
+        KeyCode::F(n) => match n {
+            1 => vec![0x1b, b'O', b'P'],
+            2 => vec![0x1b, b'O', b'Q'],
+            3 => vec![0x1b, b'O', b'R'],
+            4 => vec![0x1b, b'O', b'S'],
+            5 => vec![0x1b, b'[', b'1', b'5', b'~'],
+            6 => vec![0x1b, b'[', b'1', b'7', b'~'],
+            7 => vec![0x1b, b'[', b'1', b'8', b'~'],
+            8 => vec![0x1b, b'[', b'1', b'9', b'~'],
+            9 => vec![0x1b, b'[', b'2', b'0', b'~'],
+            10 => vec![0x1b, b'[', b'2', b'1', b'~'],
+            11 => vec![0x1b, b'[', b'2', b'3', b'~'],
+            12 => vec![0x1b, b'[', b'2', b'4', b'~'],
+            _ => return None,
+        },
         _ => return None,
     };
 

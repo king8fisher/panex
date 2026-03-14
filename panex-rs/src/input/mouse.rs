@@ -75,10 +75,15 @@ pub fn handle_mouse(
     // In Focus mode, forward non-scroll mouse events to the child PTY.
     // Scroll is handled uniformly below (forwarded if alternate screen, else viewport).
     if app.mode == InputMode::Focus
-        && !matches!(event.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown)
+        && !matches!(
+            event.kind,
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+        )
     {
         // Click on process list or gutter exits focus
-        if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && event.column < OUTPUT_PANEL_X {
+        if matches!(event.kind, MouseEventKind::Down(MouseButton::Left))
+            && event.column < OUTPUT_PANEL_X
+        {
             if event.column < GUTTER_START {
                 let index = event.row as usize;
                 if index < pm.process_count() {
@@ -89,7 +94,9 @@ pub fn handle_mouse(
             return;
         }
         // Click on status bar exits focus
-        if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && event.row as usize >= visible_height {
+        if matches!(event.kind, MouseEventKind::Down(MouseButton::Left))
+            && event.row as usize >= visible_height
+        {
             app.exit_focus();
             return;
         }
@@ -265,21 +272,24 @@ pub fn handle_mouse(
                 if let Some(edge) = at_edge {
                     if app.drag_edge != Some(edge) {
                         // Just entered edge — compute adaptive interval from approach velocity
-                        app.edge_scroll_interval = if let Some((prev_row, prev_time)) = app.last_drag_row {
-                            let dy = (event.row as i32 - prev_row as i32).unsigned_abs().max(1);
-                            let dt_ms = prev_time.elapsed().as_millis().max(1) as u32;
-                            // ms per row of cursor movement; clamp interval to 30..300ms
-                            let ms_per_row = dt_ms / dy;
-                            Duration::from_millis((ms_per_row * 2).clamp(30, 300) as u64)
-                        } else {
-                            EDGE_SCROLL_BASE
-                        };
+                        app.edge_scroll_interval =
+                            if let Some((prev_row, prev_time)) = app.last_drag_row {
+                                let dy = (event.row as i32 - prev_row as i32).unsigned_abs().max(1);
+                                let dt_ms = prev_time.elapsed().as_millis().max(1) as u32;
+                                // ms per row of cursor movement; clamp interval to 30..300ms
+                                let ms_per_row = dt_ms / dy;
+                                Duration::from_millis((ms_per_row * 2).clamp(30, 300) as u64)
+                            } else {
+                                EDGE_SCROLL_BASE
+                            };
 
                         // Immediate first scroll
                         if let Some(process) = pm.get_process_mut(name) {
                             match edge {
                                 DragEdge::Top => scroll_up(process, 1),
-                                DragEdge::Bottom => scroll_down(process, 1, visible_height, viewport_width),
+                                DragEdge::Bottom => {
+                                    scroll_down(process, 1, visible_height, viewport_width)
+                                }
                             }
                         }
                         app.last_edge_scroll = Some(Instant::now());
@@ -299,7 +309,12 @@ pub fn handle_mouse(
                         // Dragging onto/past status bar = end of last visible line
                         if process.wrap_enabled {
                             let visual_row = last_row + process.scroll_offset;
-                            let mut p = visual_to_buffer(visual_row, 0, process.buffer.get_all_lines(), viewport_width);
+                            let mut p = visual_to_buffer(
+                                visual_row,
+                                0,
+                                process.buffer.get_all_lines(),
+                                viewport_width,
+                            );
                             p.col = usize::MAX;
                             p
                         } else {
@@ -310,7 +325,12 @@ pub fn handle_mouse(
                         // Dragging to gutter = end of previous line
                         if process.wrap_enabled {
                             let visual_row = clamped_row as usize + process.scroll_offset;
-                            let p = visual_to_buffer(visual_row, 0, process.buffer.get_all_lines(), viewport_width);
+                            let p = visual_to_buffer(
+                                visual_row,
+                                0,
+                                process.buffer.get_all_lines(),
+                                viewport_width,
+                            );
                             if p.row > 0 || p.col > 0 {
                                 // Go to end of previous buffer row
                                 if p.col > 0 {
@@ -379,10 +399,8 @@ pub fn handle_mouse(
             if app.auto_copy && app.selection.is_active() {
                 if let Some(name) = &selected_name {
                     if let Some(process) = pm.get_process(name) {
-                        let text = extract_selected_text(
-                            &app.selection,
-                            process.buffer.get_all_lines(),
-                        );
+                        let text =
+                            extract_selected_text(&app.selection, process.buffer.get_all_lines());
                         if !text.is_empty() && copy_to_clipboard(&text) {
                             app.set_status("Copied!");
                         }
@@ -442,12 +460,20 @@ pub fn tick_edge_scroll(
     if let Some(process) = pm.get_process(&name) {
         let pos = if process.wrap_enabled {
             match edge {
-                DragEdge::Top => {
-                    visual_to_buffer(process.scroll_offset, 0, process.buffer.get_all_lines(), viewport_width)
-                }
+                DragEdge::Top => visual_to_buffer(
+                    process.scroll_offset,
+                    0,
+                    process.buffer.get_all_lines(),
+                    viewport_width,
+                ),
                 DragEdge::Bottom => {
                     let visual_row = visible_height.saturating_sub(1) + process.scroll_offset;
-                    let mut p = visual_to_buffer(visual_row, 0, process.buffer.get_all_lines(), viewport_width);
+                    let mut p = visual_to_buffer(
+                        visual_row,
+                        0,
+                        process.buffer.get_all_lines(),
+                        viewport_width,
+                    );
                     p.col = usize::MAX;
                     p
                 }

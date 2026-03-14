@@ -45,7 +45,12 @@ pub struct PanexConfig {
 }
 
 impl PanexConfig {
-    pub fn from_args(commands: Vec<String>, names: Option<String>, no_shift_tab: bool, timeout: u64) -> Self {
+    pub fn from_args(
+        commands: Vec<String>,
+        names: Option<String>,
+        no_shift_tab: bool,
+        timeout: u64,
+    ) -> Self {
         let name_list: Vec<String> = names
             .map(|n| n.split(',').map(|s| s.trim().to_string()).collect())
             .unwrap_or_default();

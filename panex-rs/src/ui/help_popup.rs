@@ -186,7 +186,11 @@ pub struct ShutdownPopup {
 
 impl ShutdownPopup {
     pub fn new(stopped: usize, total: usize, remaining_ms: u64) -> Self {
-        Self { stopped, total, remaining_ms }
+        Self {
+            stopped,
+            total,
+            remaining_ms,
+        }
     }
 }
 
@@ -208,12 +212,13 @@ impl Widget for ShutdownPopup {
 
         let text = vec![
             Line::from(""),
-            Line::from(Span::styled(format!(" {} ", header), Style::default().fg(Color::Yellow))),
+            Line::from(Span::styled(
+                format!(" {} ", header),
+                Style::default().fg(Color::Yellow),
+            )),
             Line::from(format!("  {}  ", status)),
         ];
-        Paragraph::new(text)
-            .block(block)
-            .render(popup_area, buf);
+        Paragraph::new(text).block(block).render(popup_area, buf);
     }
 }
 

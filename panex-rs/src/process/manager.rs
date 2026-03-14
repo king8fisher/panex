@@ -47,7 +47,12 @@ pub struct ProcessManager {
 }
 
 impl ProcessManager {
-    pub fn new(event_tx: mpsc::UnboundedSender<AppEvent>, cols: u16, rows: u16, timeout: u64) -> Self {
+    pub fn new(
+        event_tx: mpsc::UnboundedSender<AppEvent>,
+        cols: u16,
+        rows: u16,
+        timeout: u64,
+    ) -> Self {
         Self {
             processes: HashMap::new(),
             process_order: Vec::new(),
@@ -104,17 +109,26 @@ impl ProcessManager {
                 match reader_guard.read(&mut buf) {
                     Ok(0) => {
                         drop(reader_guard);
-                        let _ = tx.send(AppEvent::ProcessExited(proc_name.clone(), generation, None));
+                        let _ =
+                            tx.send(AppEvent::ProcessExited(proc_name.clone(), generation, None));
                         break;
                     }
                     Ok(n) => {
                         drop(reader_guard);
-                        let _ = tx.send(AppEvent::ProcessOutput(proc_name.clone(), generation, buf[..n].to_vec()));
+                        let _ = tx.send(AppEvent::ProcessOutput(
+                            proc_name.clone(),
+                            generation,
+                            buf[..n].to_vec(),
+                        ));
                     }
                     Err(e) => {
                         drop(reader_guard);
                         if !shutdown.load(Ordering::SeqCst) {
-                            let _ = tx.send(AppEvent::ProcessError(proc_name.clone(), generation, e.to_string()));
+                            let _ = tx.send(AppEvent::ProcessError(
+                                proc_name.clone(),
+                                generation,
+                                e.to_string(),
+                            ));
                         }
                         break;
                     }
@@ -122,7 +136,9 @@ impl ProcessManager {
             }
         });
 
-        let _ = self.event_tx.send(AppEvent::ProcessStarted(name.to_string()));
+        let _ = self
+            .event_tx
+            .send(AppEvent::ProcessStarted(name.to_string()));
         Ok(())
     }
 
@@ -227,13 +243,18 @@ impl ProcessManager {
                 };
                 let total_display_lines = if process.wrap_enabled && self.cols > 0 {
                     let cols = self.cols as usize;
-                    lines.iter().take(content_count).map(|line| {
-                        if line.cells.is_empty() {
-                            1
-                        } else {
-                            line.cells.len().div_ceil(cols)
-                        }
-                    }).sum::<usize>().max(1)
+                    lines
+                        .iter()
+                        .take(content_count)
+                        .map(|line| {
+                            if line.cells.is_empty() {
+                                1
+                            } else {
+                                line.cells.len().div_ceil(cols)
+                            }
+                        })
+                        .sum::<usize>()
+                        .max(1)
                 } else {
                     content_count
                 };

@@ -148,11 +148,8 @@ async fn run_app(
         terminal.draw(|f| {
             let size = f.area();
 
-            let main_chunks = Layout::vertical([
-                Constraint::Min(0),
-                Constraint::Length(1),
-            ])
-            .split(size);
+            let main_chunks =
+                Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).split(size);
 
             let content_chunks = Layout::horizontal([
                 Constraint::Length(20),
@@ -178,7 +175,12 @@ async fn run_app(
             let proc_no_shift_tab = selected_process
                 .map(|p| p.config.no_shift_tab)
                 .unwrap_or(false);
-            let status_bar = StatusBar::new(app.mode, app.no_shift_tab, proc_no_shift_tab, app.active_status());
+            let status_bar = StatusBar::new(
+                app.mode,
+                app.no_shift_tab,
+                proc_no_shift_tab,
+                app.active_status(),
+            );
             f.render_widget(status_bar, main_chunks[1]);
 
             // Help popup
@@ -190,7 +192,8 @@ async fn run_app(
             if app.shutting_down {
                 let stopped = pm.stopped_count();
                 let total = pm.process_count();
-                let remaining_ms = app.shutdown_start
+                let remaining_ms = app
+                    .shutdown_start
                     .map(|start| {
                         let elapsed = start.elapsed().as_millis() as u64;
                         config.timeout.saturating_sub(elapsed)

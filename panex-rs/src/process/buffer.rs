@@ -100,6 +100,25 @@ impl TerminalBuffer {
     pub fn take_pending_responses(&mut self) -> Vec<Vec<u8>> {
         std::mem::take(&mut self.state.pending_responses)
     }
+
+    /// Render the buffer grid as a plain-text string for snapshot testing.
+    /// Each line is converted to its character content with trailing spaces trimmed.
+    /// Lines are joined with newlines; trailing empty lines are stripped.
+    #[allow(dead_code)]
+    pub fn to_test_string(&self) -> String {
+        let count = self.content_line_count();
+        let mut result: Vec<String> = Vec::with_capacity(count);
+        for i in 0..count {
+            let line = &self.state.lines[i];
+            let s: String = line.cells.iter().map(|cell| cell.c).collect();
+            result.push(s.trim_end().to_string());
+        }
+        // Remove trailing empty lines
+        while result.last().is_some_and(|s| s.is_empty()) {
+            result.pop();
+        }
+        result.join("\n")
+    }
 }
 
 impl TerminalState {
@@ -259,19 +278,26 @@ impl TerminalState {
                 7 => self.current_style = self.current_style.add_modifier(Modifier::REVERSED),
                 8 => self.current_style = self.current_style.add_modifier(Modifier::HIDDEN),
                 9 => self.current_style = self.current_style.add_modifier(Modifier::CROSSED_OUT),
-                22 => self.current_style = self.current_style.remove_modifier(Modifier::BOLD | Modifier::DIM),
+                22 => {
+                    self.current_style = self
+                        .current_style
+                        .remove_modifier(Modifier::BOLD | Modifier::DIM)
+                }
                 23 => self.current_style = self.current_style.remove_modifier(Modifier::ITALIC),
                 24 => self.current_style = self.current_style.remove_modifier(Modifier::UNDERLINED),
                 25 => self.current_style = self.current_style.remove_modifier(Modifier::SLOW_BLINK),
                 27 => self.current_style = self.current_style.remove_modifier(Modifier::REVERSED),
                 28 => self.current_style = self.current_style.remove_modifier(Modifier::HIDDEN),
-                29 => self.current_style = self.current_style.remove_modifier(Modifier::CROSSED_OUT),
+                29 => {
+                    self.current_style = self.current_style.remove_modifier(Modifier::CROSSED_OUT)
+                }
                 30..=37 => {
                     self.current_style = self.current_style.fg(ansi_to_color(params[i] - 30));
                 }
                 38 => {
                     if i + 2 < params.len() && params[i + 1] == 5 {
-                        self.current_style = self.current_style.fg(Color::Indexed(params[i + 2] as u8));
+                        self.current_style =
+                            self.current_style.fg(Color::Indexed(params[i + 2] as u8));
                         i += 2;
                     } else if i + 4 < params.len() && params[i + 1] == 2 {
                         self.current_style = self.current_style.fg(Color::Rgb(
@@ -288,7 +314,8 @@ impl TerminalState {
                 }
                 48 => {
                     if i + 2 < params.len() && params[i + 1] == 5 {
-                        self.current_style = self.current_style.bg(Color::Indexed(params[i + 2] as u8));
+                        self.current_style =
+                            self.current_style.bg(Color::Indexed(params[i + 2] as u8));
                         i += 2;
                     } else if i + 4 < params.len() && params[i + 1] == 2 {
                         self.current_style = self.current_style.bg(Color::Rgb(
@@ -301,10 +328,12 @@ impl TerminalState {
                 }
                 49 => self.current_style = self.current_style.bg(Color::Reset),
                 90..=97 => {
-                    self.current_style = self.current_style.fg(bright_ansi_to_color(params[i] - 90));
+                    self.current_style =
+                        self.current_style.fg(bright_ansi_to_color(params[i] - 90));
                 }
                 100..=107 => {
-                    self.current_style = self.current_style.bg(bright_ansi_to_color(params[i] - 100));
+                    self.current_style =
+                        self.current_style.bg(bright_ansi_to_color(params[i] - 100));
                 }
                 _ => {}
             }
@@ -380,7 +409,11 @@ impl Perform for TerminalState {
     fn csi_dispatch(&mut self, params: &Params, intermediates: &[u8], _ignore: bool, action: char) {
         let params_vec: Vec<u16> = params.iter().flat_map(|p| p.iter().copied()).collect();
         let get_param = |i: usize, default: u16| -> u16 {
-            params_vec.get(i).copied().filter(|&v| v != 0).unwrap_or(default)
+            params_vec
+                .get(i)
+                .copied()
+                .filter(|&v| v != 0)
+                .unwrap_or(default)
         };
 
         match action {
@@ -582,7 +615,8 @@ impl Perform for TerminalState {
                     }
                     6 => {
                         // Cursor position report
-                        let response = format!("\x1b[{};{}R", self.cursor_row + 1, self.cursor_col + 1);
+                        let response =
+                            format!("\x1b[{};{}R", self.cursor_row + 1, self.cursor_col + 1);
                         self.pending_responses.push(response.into_bytes());
                     }
                     _ => {}

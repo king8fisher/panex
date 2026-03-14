@@ -15,8 +15,18 @@ pub struct StatusBar<'a> {
 }
 
 impl<'a> StatusBar<'a> {
-    pub fn new(mode: InputMode, no_shift_tab: bool, proc_no_shift_tab: bool, status_message: Option<&'a str>) -> Self {
-        Self { mode, no_shift_tab, proc_no_shift_tab, status_message }
+    pub fn new(
+        mode: InputMode,
+        no_shift_tab: bool,
+        proc_no_shift_tab: bool,
+        status_message: Option<&'a str>,
+    ) -> Self {
+        Self {
+            mode,
+            no_shift_tab,
+            proc_no_shift_tab,
+            status_message,
+        }
     }
 }
 
