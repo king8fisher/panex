@@ -11,21 +11,28 @@ use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use std::time::{Duration, Instant};
 
 const SCROLL_AMOUNT: usize = 3;
-/// First column of the gutter (between process list and output panel)
-const GUTTER_START: u16 = 19;
-/// Left edge of output panel (process list width + delimiter)
-const OUTPUT_PANEL_X: u16 = 21;
 /// Minimum cell distance before a drag becomes a selection
 const DRAG_THRESHOLD: u16 = 2;
 
+/// First column of the gutter (between process list and output panel)
+fn gutter_start(panel_cols: u16) -> u16 {
+    panel_cols.saturating_sub(1)
+}
+
+/// Left edge of output panel (process list width + delimiter)
+fn output_panel_x(panel_cols: u16) -> u16 {
+    panel_cols + 1
+}
+
 /// Encode a mouse event as SGR (mode 1006) escape sequence for forwarding to child PTY.
 /// Coordinates are translated so the output panel's top-left is (1,1).
-fn mouse_to_sgr(event: &MouseEvent, visible_height: usize) -> Option<Vec<u8>> {
+fn mouse_to_sgr(event: &MouseEvent, visible_height: usize, panel_cols: u16) -> Option<Vec<u8>> {
+    let opx = output_panel_x(panel_cols);
     // Only forward events in the output panel area
-    if event.column < OUTPUT_PANEL_X || event.row as usize >= visible_height {
+    if event.column < opx || event.row as usize >= visible_height {
         return None;
     }
-    let col = event.column - OUTPUT_PANEL_X + 1; // 1-based
+    let col = event.column - opx + 1; // 1-based
     let row = event.row + 1; // 1-based
 
     let (button, press) = match event.kind {
@@ -54,7 +61,10 @@ pub fn handle_mouse(
     pm: &mut ProcessManager,
     visible_height: usize,
     viewport_width: usize,
+    panel_cols: u16,
 ) {
+    let gutter = gutter_start(panel_cols);
+    let opx = output_panel_x(panel_cols);
     // Help popup: scroll or close on click
     if app.show_help {
         match event.kind {
@@ -81,10 +91,8 @@ pub fn handle_mouse(
         )
     {
         // Click on process list or gutter exits focus
-        if matches!(event.kind, MouseEventKind::Down(MouseButton::Left))
-            && event.column < OUTPUT_PANEL_X
-        {
-            if event.column < GUTTER_START {
+        if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && event.column < opx {
+            if event.column < gutter {
                 let index = event.row as usize;
                 if index < pm.process_count() {
                     app.selected_index = index;
@@ -103,7 +111,7 @@ pub fn handle_mouse(
 
         let selected_name = pm.process_names().get(app.selected_index).cloned();
         if let Some(name) = selected_name {
-            if let Some(bytes) = mouse_to_sgr(&event, visible_height) {
+            if let Some(bytes) = mouse_to_sgr(&event, visible_height, panel_cols) {
                 let _ = pm.write_to_process(&name, &bytes);
             }
         }
@@ -118,7 +126,7 @@ pub fn handle_mouse(
                 if let Some(process) = pm.get_process(name) {
                     if process.buffer.is_alternate_screen() {
                         // TUI app: forward scroll to child PTY
-                        if let Some(bytes) = mouse_to_sgr(&event, visible_height) {
+                        if let Some(bytes) = mouse_to_sgr(&event, visible_height, panel_cols) {
                             let _ = pm.write_to_process(name, &bytes);
                         }
                     } else if matches!(event.kind, MouseEventKind::ScrollUp) {
@@ -138,7 +146,7 @@ pub fn handle_mouse(
                 app.exit_focus();
                 app.selection.clear();
                 app.pending_click = None;
-            } else if event.column < GUTTER_START {
+            } else if event.column < gutter {
                 // Click on process list (col 0–18) - select process
                 let index = event.row as usize;
                 if index < pm.process_count() {
@@ -147,7 +155,7 @@ pub fn handle_mouse(
                 app.exit_focus();
                 app.selection.clear();
                 app.pending_click = None;
-            } else if event.column < OUTPUT_PANEL_X {
+            } else if event.column < opx {
                 // Click on gutter (col 19–20) - start line selection
                 app.selection.clear();
                 app.pending_click = None;
@@ -155,18 +163,18 @@ pub fn handle_mouse(
                     if let Some(process) = pm.get_process(name) {
                         let pos = if process.wrap_enabled {
                             screen_to_buffer_wrapped(
-                                OUTPUT_PANEL_X,
+                                opx,
                                 event.row,
-                                OUTPUT_PANEL_X,
+                                opx,
                                 process.scroll_offset,
                                 process.buffer.get_all_lines(),
                                 viewport_width,
                             )
                         } else {
                             screen_to_buffer(
-                                OUTPUT_PANEL_X,
+                                opx,
                                 event.row,
-                                OUTPUT_PANEL_X,
+                                opx,
                                 process.scroll_offset,
                                 viewport_width,
                             )
@@ -185,18 +193,18 @@ pub fn handle_mouse(
                     if let Some(process) = pm.get_process(name) {
                         let raw_pos = if process.wrap_enabled {
                             screen_to_buffer_wrapped(
-                                event.column.max(OUTPUT_PANEL_X),
+                                event.column.max(opx),
                                 event.row,
-                                OUTPUT_PANEL_X,
+                                opx,
                                 process.scroll_offset,
                                 process.buffer.get_all_lines(),
                                 viewport_width,
                             )
                         } else {
                             screen_to_buffer(
-                                event.column.max(OUTPUT_PANEL_X),
+                                event.column.max(opx),
                                 event.row,
-                                OUTPUT_PANEL_X,
+                                opx,
                                 process.scroll_offset,
                                 viewport_width,
                             )
@@ -321,7 +329,7 @@ pub fn handle_mouse(
                             let buf_row = last_row + process.scroll_offset;
                             BufferPos::new(buf_row, usize::MAX)
                         }
-                    } else if event.column < OUTPUT_PANEL_X {
+                    } else if event.column < opx {
                         // Dragging to gutter = end of previous line
                         if process.wrap_enabled {
                             let visual_row = clamped_row as usize + process.scroll_offset;
@@ -357,7 +365,7 @@ pub fn handle_mouse(
                             screen_to_buffer_wrapped(
                                 event.column,
                                 clamped_row,
-                                OUTPUT_PANEL_X,
+                                opx,
                                 process.scroll_offset,
                                 process.buffer.get_all_lines(),
                                 viewport_width,
@@ -366,7 +374,7 @@ pub fn handle_mouse(
                             screen_to_buffer(
                                 event.column,
                                 clamped_row,
-                                OUTPUT_PANEL_X,
+                                opx,
                                 process.scroll_offset,
                                 viewport_width,
                             )

@@ -68,7 +68,12 @@ impl ProcessManager {
 
     pub fn add_process(&mut self, config: ProcessConfig) {
         let name = config.name.clone();
-        let process = ManagedProcess::new(config, self.cols as usize, self.rows as usize, self.buffer_size);
+        let process = ManagedProcess::new(
+            config,
+            self.cols as usize,
+            self.rows as usize,
+            self.buffer_size,
+        );
         self.processes.insert(name.clone(), process);
         self.process_order.push(name);
     }

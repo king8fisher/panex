@@ -14,6 +14,7 @@ pub fn handle_event(
     pm: &mut ProcessManager,
     visible_height: usize,
     viewport_width: usize,
+    panel_cols: u16,
 ) -> Option<(u16, u16)> {
     match event {
         Event::Key(key) => {
@@ -21,7 +22,7 @@ pub fn handle_event(
             None
         }
         Event::Mouse(mouse) => {
-            super::mouse::handle_mouse(mouse, app, pm, visible_height, viewport_width);
+            super::mouse::handle_mouse(mouse, app, pm, visible_height, viewport_width, panel_cols);
             None
         }
         Event::Resize(cols, rows) => Some((cols, rows)),

@@ -46,10 +46,7 @@ fn default_buffer_uses_10000_line_limit() {
         .collect::<String>()
         .into_bytes();
     let count = line_count_default(80, 24, &input);
-    assert!(
-        count <= 10_000,
-        "expected <= 10000 lines, got {count}"
-    );
+    assert!(count <= 10_000, "expected <= 10000 lines, got {count}");
 }
 
 #[test]
@@ -77,10 +74,7 @@ fn buffer_size_of_one_keeps_only_latest() {
     let output = run_with_limit(80, 24, 1, input);
     let lines: Vec<&str> = output.lines().collect();
     assert!(lines.len() <= 1, "expected <= 1 line, got {}", lines.len());
-    assert!(
-        !output.contains("first"),
-        "first should have been evicted"
-    );
+    assert!(!output.contains("first"), "first should have been evicted");
     assert!(
         !output.contains("second"),
         "second should have been evicted"

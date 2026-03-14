@@ -62,6 +62,11 @@ struct Cli {
     /// Maximum scrollback lines per process (default: 10000)
     #[arg(short = 'b', long, default_value_t = process::buffer::DEFAULT_MAX_SCROLLBACK)]
     buffer_size: usize,
+
+    /// Process list panel width as percentage of terminal width (10–50).
+    /// Default: fixed 20 columns. When set, the panel width scales with the terminal.
+    #[arg(short = 'w', long)]
+    panel_width: Option<u16>,
 }
 
 #[tokio::main]
@@ -73,7 +78,14 @@ async fn main() -> Result<()> {
         std::process::exit(1);
     }
 
-    let config = PanexConfig::from_args(cli.commands, cli.names, cli.no_shift_tab, cli.timeout, cli.buffer_size);
+    let config = PanexConfig::from_args(
+        cli.commands,
+        cli.names,
+        cli.no_shift_tab,
+        cli.timeout,
+        cli.buffer_size,
+        cli.panel_width,
+    );
     let auto_copy = !cli.no_auto_copy;
 
     run(config, auto_copy).await
@@ -119,10 +131,17 @@ async fn run_app(
     let (event_tx, mut event_rx) = mpsc::unbounded_channel::<AppEvent>();
 
     let size = terminal.size()?;
-    // Output panel width = total - process list (20) - delimiter (1)
-    let output_cols = size.width.saturating_sub(21);
+    let panel_cols = config.compute_panel_columns(size.width);
+    // Output panel width = total - process list - delimiter (1)
+    let output_cols = size.width.saturating_sub(panel_cols + 1);
     let output_rows = size.height.saturating_sub(1); // -1 for status bar
-    let mut pm = ProcessManager::new(event_tx.clone(), output_cols, output_rows, config.timeout, config.buffer_size);
+    let mut pm = ProcessManager::new(
+        event_tx.clone(),
+        output_cols,
+        output_rows,
+        config.timeout,
+        config.buffer_size,
+    );
 
     // Add processes
     for proc_config in &config.processes {
@@ -155,8 +174,9 @@ async fn run_app(
             let main_chunks =
                 Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).split(size);
 
+            let panel_cols = config.compute_panel_columns(size.width);
             let content_chunks = Layout::horizontal([
-                Constraint::Length(20),
+                Constraint::Length(panel_cols),
                 Constraint::Length(1), // delimiter
                 Constraint::Min(0),
             ])
@@ -243,16 +263,21 @@ async fn run_app(
         }
 
         // Apply pending resize after debounce period
+        let panel_cols = config.compute_panel_columns(term_size.width);
         if let (Some((cols, rows)), Some(deadline)) = (pending_resize, resize_deadline) {
             if Instant::now() >= deadline {
-                pm.resize(cols.saturating_sub(21), rows.saturating_sub(1));
+                let resize_panel = config.compute_panel_columns(cols);
+                pm.resize(
+                    cols.saturating_sub(resize_panel + 1),
+                    rows.saturating_sub(1),
+                );
                 pending_resize = None;
                 resize_deadline = None;
             }
         }
 
         let visible_height = term_size.height.saturating_sub(1) as usize; // -1 for status bar
-        let viewport_width = term_size.width.saturating_sub(21) as usize; // -20 for process list, -1 for delimiter
+        let viewport_width = term_size.width.saturating_sub(panel_cols + 1) as usize;
 
         // Edge-scroll during drag selection (runs every iteration)
         input::mouse::tick_edge_scroll(&mut app, &mut pm, visible_height, viewport_width);
@@ -263,7 +288,7 @@ async fn run_app(
 
             Some(Ok(event)) = event_stream.next() => {
                 if let Event::Key(_) | Event::Mouse(_) | Event::Resize(_, _) = event {
-                    if let Some((cols, rows)) = input::handle_event(event, &mut app, &mut pm, visible_height, viewport_width) {
+                    if let Some((cols, rows)) = input::handle_event(event, &mut app, &mut pm, visible_height, viewport_width, panel_cols) {
                         // Schedule debounced resize (only push deadline if size changed)
                         let new_size = Some((cols, rows));
                         if pending_resize != new_size {
@@ -288,7 +313,7 @@ async fn run_app(
                         pm.handle_error(&name, gen, &error);
                     }
                     AppEvent::Input(e) => {
-                        if let Some((cols, rows)) = input::handle_event(e, &mut app, &mut pm, visible_height, viewport_width) {
+                        if let Some((cols, rows)) = input::handle_event(e, &mut app, &mut pm, visible_height, viewport_width, panel_cols) {
                             let new_size = Some((cols, rows));
                             if pending_resize != new_size {
                                 pending_resize = new_size;
