@@ -1,10 +1,11 @@
 use crate::input::SelectionState;
 use crate::process::ManagedProcess;
+use crate::ui::search::SearchState;
 use crate::ui::InputMode;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::Modifier,
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph, Widget},
 };
@@ -14,6 +15,7 @@ pub struct OutputPanel<'a> {
     #[allow(dead_code)]
     mode: InputMode,
     selection: &'a SelectionState,
+    search: &'a SearchState,
 }
 
 impl<'a> OutputPanel<'a> {
@@ -21,11 +23,13 @@ impl<'a> OutputPanel<'a> {
         process: Option<&'a ManagedProcess>,
         mode: InputMode,
         selection: &'a SelectionState,
+        search: &'a SearchState,
     ) -> Self {
         Self {
             process,
             mode,
             selection,
+            search,
         }
     }
 }
@@ -60,6 +64,13 @@ impl Widget for OutputPanel<'_> {
                                     .map(|(i, cell)| {
                                         let col = start_col + i;
                                         let style = if self.selection.contains(row_idx, col) {
+                                            cell.style.add_modifier(Modifier::REVERSED)
+                                        } else if self.search.is_current_match(row_idx, col) {
+                                            Style::default()
+                                                .fg(Color::Black)
+                                                .bg(Color::Yellow)
+                                                .add_modifier(Modifier::BOLD)
+                                        } else if self.search.contains_any_match(row_idx, col) {
                                             cell.style.add_modifier(Modifier::REVERSED)
                                         } else {
                                             cell.style
@@ -101,6 +112,13 @@ impl Widget for OutputPanel<'_> {
                                 .take(inner_width)
                                 .map(|(col, cell)| {
                                     let style = if self.selection.contains(row_idx, col) {
+                                        cell.style.add_modifier(Modifier::REVERSED)
+                                    } else if self.search.is_current_match(row_idx, col) {
+                                        Style::default()
+                                            .fg(Color::Black)
+                                            .bg(Color::Yellow)
+                                            .add_modifier(Modifier::BOLD)
+                                    } else if self.search.contains_any_match(row_idx, col) {
                                         cell.style.add_modifier(Modifier::REVERSED)
                                     } else {
                                         cell.style

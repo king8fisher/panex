@@ -192,7 +192,8 @@ async fn run_app(
             // Output panel
             let selected_name = pm.process_names().get(app.selected_index).cloned();
             let selected_process = selected_name.as_ref().and_then(|n| pm.get_process(n));
-            let output_panel = OutputPanel::new(selected_process, app.mode, &app.selection);
+            let output_panel =
+                OutputPanel::new(selected_process, app.mode, &app.selection, &app.search);
             f.render_widget(output_panel, content_chunks[2]);
 
             // Status bar
@@ -204,6 +205,7 @@ async fn run_app(
                 app.no_shift_tab,
                 proc_no_shift_tab,
                 app.active_status(),
+                &app.search,
             );
             f.render_widget(status_bar, main_chunks[1]);
 

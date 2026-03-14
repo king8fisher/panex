@@ -76,6 +76,18 @@ impl Widget for HelpPopup {
                 Span::raw("Page down"),
             ]),
             Line::from(vec![
+                Span::styled("/      ", Style::default().fg(Color::Yellow)),
+                Span::raw("Search in output"),
+            ]),
+            Line::from(vec![
+                Span::styled("n      ", Style::default().fg(Color::Yellow)),
+                Span::raw("Next search match"),
+            ]),
+            Line::from(vec![
+                Span::styled("N      ", Style::default().fg(Color::Yellow)),
+                Span::raw("Previous search match"),
+            ]),
+            Line::from(vec![
                 Span::styled("?      ", Style::default().fg(Color::Yellow)),
                 Span::raw("Toggle help"),
             ]),

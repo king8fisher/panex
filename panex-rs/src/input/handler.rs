@@ -4,6 +4,7 @@ use crate::input::selection::{
 };
 use crate::process::ProcessManager;
 use crate::ui::output_panel::{scroll_down, scroll_to_bottom, scroll_to_top, scroll_up};
+use crate::ui::search::{find_matches, nearest_match_index};
 use crate::ui::{App, InputMode};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 
@@ -74,6 +75,16 @@ fn handle_browse_key(
 ) {
     let count = pm.process_count();
     let selected_name = pm.process_names().get(app.selected_index).cloned();
+
+    // Handle search mode keys first
+    if app.search.is_typing() {
+        handle_search_typing(key, app, pm, visible_height, viewport_width);
+        return;
+    }
+    if app.search.is_active() {
+        handle_search_active(key, app, pm, visible_height, viewport_width);
+        return;
+    }
 
     // Handle selection mode keys first
     if app.selection.is_active() {
@@ -261,10 +272,157 @@ fn handle_browse_key(
             }
         }
 
+        // Search
+        KeyCode::Char('/') => {
+            if let Some(name) = &selected_name {
+                if let Some(process) = pm.get_process(name) {
+                    app.search = crate::ui::search::SearchState::new_typing(process.scroll_offset);
+                }
+            }
+        }
+
         // Help
         KeyCode::Char('?') => app.toggle_help(),
 
         _ => {}
+    }
+}
+
+fn handle_search_typing(
+    key: KeyEvent,
+    app: &mut App,
+    pm: &mut ProcessManager,
+    visible_height: usize,
+    viewport_width: usize,
+) {
+    let selected_name = pm.process_names().get(app.selected_index).cloned();
+
+    match key.code {
+        KeyCode::Esc => {
+            // Cancel search and restore scroll position
+            if let Some(scroll) = app.search.cancel() {
+                if let Some(name) = &selected_name {
+                    if let Some(process) = pm.get_process_mut(name) {
+                        process.scroll_offset = scroll;
+                        process.auto_scroll = false;
+                    }
+                }
+            }
+        }
+        KeyCode::Enter => {
+            // Execute the search
+            let query = app.search.query().to_string();
+            if query.is_empty() {
+                app.search.cancel();
+                return;
+            }
+            if let Some(name) = &selected_name {
+                if let Some(process) = pm.get_process(name) {
+                    let matches = find_matches(&query, process.buffer.get_all_lines());
+                    let saved_scroll = app.search.saved_scroll().unwrap_or(0);
+                    if matches.is_empty() {
+                        app.search = crate::ui::search::SearchState::new_active(
+                            query,
+                            vec![],
+                            0,
+                            saved_scroll,
+                        );
+                        app.set_status("No matches");
+                    } else {
+                        let current = nearest_match_index(&matches, process.scroll_offset);
+                        // Scroll to show the current match
+                        let match_row = matches[current].row;
+                        app.search = crate::ui::search::SearchState::new_active(
+                            query,
+                            matches,
+                            current,
+                            saved_scroll,
+                        );
+                        if let Some(process) = pm.get_process_mut(name) {
+                            scroll_to_match(process, match_row, visible_height, viewport_width);
+                        }
+                    }
+                }
+            }
+        }
+        KeyCode::Backspace => {
+            app.search.pop_char();
+        }
+        KeyCode::Char(c) => {
+            app.search.push_char(c);
+        }
+        _ => {}
+    }
+}
+
+fn handle_search_active(
+    key: KeyEvent,
+    app: &mut App,
+    pm: &mut ProcessManager,
+    visible_height: usize,
+    viewport_width: usize,
+) {
+    let selected_name = pm.process_names().get(app.selected_index).cloned();
+
+    match key.code {
+        KeyCode::Esc => {
+            // Cancel search and restore scroll position
+            if let Some(scroll) = app.search.cancel() {
+                if let Some(name) = &selected_name {
+                    if let Some(process) = pm.get_process_mut(name) {
+                        process.scroll_offset = scroll;
+                        process.auto_scroll = false;
+                    }
+                }
+            }
+        }
+        KeyCode::Enter => {
+            // Confirm search — stay at current match position
+            app.search.confirm();
+        }
+        KeyCode::Char('n') => {
+            app.search.next_match();
+            if let Some(m) = app.search.current_match() {
+                let row = m.row;
+                if let Some(name) = &selected_name {
+                    if let Some(process) = pm.get_process_mut(name) {
+                        scroll_to_match(process, row, visible_height, viewport_width);
+                    }
+                }
+            }
+        }
+        KeyCode::Char('N') => {
+            app.search.prev_match();
+            if let Some(m) = app.search.current_match() {
+                let row = m.row;
+                if let Some(name) = &selected_name {
+                    if let Some(process) = pm.get_process_mut(name) {
+                        scroll_to_match(process, row, visible_height, viewport_width);
+                    }
+                }
+            }
+        }
+        _ => {
+            // Any other key exits search mode
+            app.search.confirm();
+        }
+    }
+}
+
+/// Scroll the output so that the given buffer row is visible
+fn scroll_to_match(
+    process: &mut crate::process::ManagedProcess,
+    match_row: usize,
+    visible_height: usize,
+    _viewport_width: usize,
+) {
+    process.auto_scroll = false;
+    // Center the match in the viewport if possible
+    let half = visible_height / 2;
+    if match_row > half {
+        process.scroll_offset = match_row - half;
+    } else {
+        process.scroll_offset = 0;
     }
 }
 

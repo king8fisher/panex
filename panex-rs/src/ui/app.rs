@@ -1,5 +1,6 @@
 use crate::input::selection::BufferPos;
 use crate::input::SelectionState;
+use crate::ui::search::SearchState;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
@@ -65,6 +66,8 @@ pub struct App {
     /// Mouse-down position pending selection (screen_col, screen_row, buffer_pos, shift_held) —
     /// buffer_pos is captured at click time so it survives auto-scroll changes
     pub pending_click: Option<(u16, u16, BufferPos, bool)>,
+    /// Search state for scrollback search
+    pub search: SearchState,
 }
 
 impl App {
@@ -86,6 +89,7 @@ impl App {
             edge_scroll_interval: Duration::from_millis(300),
             last_drag_row: None,
             pending_click: None,
+            search: SearchState::default(),
         }
     }
 

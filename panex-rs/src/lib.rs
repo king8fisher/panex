@@ -5,3 +5,9 @@ pub mod process {
 }
 
 pub mod config;
+
+/// Search types and logic for testing.
+/// Uses `include!` to share the source with the binary crate's `ui::search`.
+pub mod search {
+    include!("ui/search.rs");
+}
