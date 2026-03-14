@@ -310,7 +310,7 @@ fn key_to_bytes(key: KeyEvent) -> Option<Vec<u8>> {
         KeyCode::PageDown => vec![0x1b, b'[', b'6', b'~'],
         KeyCode::Insert => vec![0x1b, b'[', b'2', b'~'],
         KeyCode::F(n) => {
-            let seq = match n {
+            match n {
                 1 => vec![0x1b, b'O', b'P'],
                 2 => vec![0x1b, b'O', b'Q'],
                 3 => vec![0x1b, b'O', b'R'],
@@ -324,8 +324,7 @@ fn key_to_bytes(key: KeyEvent) -> Option<Vec<u8>> {
                 11 => vec![0x1b, b'[', b'2', b'3', b'~'],
                 12 => vec![0x1b, b'[', b'2', b'4', b'~'],
                 _ => return None,
-            };
-            seq
+            }
         }
         _ => return None,
     };

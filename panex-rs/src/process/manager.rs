@@ -231,7 +231,7 @@ impl ProcessManager {
                         if line.cells.is_empty() {
                             1
                         } else {
-                            (line.cells.len() + cols - 1) / cols
+                            line.cells.len().div_ceil(cols)
                         }
                     }).sum::<usize>().max(1)
                 } else {

@@ -74,33 +74,33 @@ pub fn handle_mouse(
 
     // In Focus mode, forward non-scroll mouse events to the child PTY.
     // Scroll is handled uniformly below (forwarded if alternate screen, else viewport).
-    if app.mode == InputMode::Focus {
-        if !matches!(event.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
-            // Click on process list or gutter exits focus
-            if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && event.column < OUTPUT_PANEL_X {
-                if event.column < GUTTER_START {
-                    let index = event.row as usize;
-                    if index < pm.process_count() {
-                        app.selected_index = index;
-                    }
-                }
-                app.exit_focus();
-                return;
-            }
-            // Click on status bar exits focus
-            if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && event.row as usize >= visible_height {
-                app.exit_focus();
-                return;
-            }
-
-            let selected_name = pm.process_names().get(app.selected_index).cloned();
-            if let Some(name) = selected_name {
-                if let Some(bytes) = mouse_to_sgr(&event, visible_height) {
-                    let _ = pm.write_to_process(&name, &bytes);
+    if app.mode == InputMode::Focus
+        && !matches!(event.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown)
+    {
+        // Click on process list or gutter exits focus
+        if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && event.column < OUTPUT_PANEL_X {
+            if event.column < GUTTER_START {
+                let index = event.row as usize;
+                if index < pm.process_count() {
+                    app.selected_index = index;
                 }
             }
+            app.exit_focus();
             return;
         }
+        // Click on status bar exits focus
+        if matches!(event.kind, MouseEventKind::Down(MouseButton::Left)) && event.row as usize >= visible_height {
+            app.exit_focus();
+            return;
+        }
+
+        let selected_name = pm.process_names().get(app.selected_index).cloned();
+        if let Some(name) = selected_name {
+            if let Some(bytes) = mouse_to_sgr(&event, visible_height) {
+                let _ = pm.write_to_process(&name, &bytes);
+            }
+        }
+        return;
     }
 
     let selected_name = pm.process_names().get(app.selected_index).cloned();

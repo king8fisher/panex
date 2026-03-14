@@ -359,7 +359,7 @@ impl Perform for TerminalState {
                 let next_tab = (self.cursor_col + 8) & !7;
                 self.cursor_col = next_tab.min(MAX_LINE_WIDTH - 1);
             }
-            0x0A | 0x0B | 0x0C => {
+            0x0A..=0x0C => {
                 // LF, VT, FF
                 self.newline();
             }
@@ -591,14 +591,11 @@ impl Perform for TerminalState {
             't' => {
                 // Window manipulation (XTWINOPS)
                 let mode = get_param(0, 0);
-                match mode {
-                    18 => {
-                        // Report terminal size in characters
-                        // Response: CSI 8 ; rows ; cols t
-                        let response = format!("\x1b[8;{};{}t", self.rows, self.cols);
-                        self.pending_responses.push(response.into_bytes());
-                    }
-                    _ => {}
+                if mode == 18 {
+                    // Report terminal size in characters
+                    // Response: CSI 8 ; rows ; cols t
+                    let response = format!("\x1b[8;{};{}t", self.rows, self.cols);
+                    self.pending_responses.push(response.into_bytes());
                 }
             }
             'h' | 'l' => {

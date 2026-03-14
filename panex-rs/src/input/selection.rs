@@ -240,12 +240,11 @@ pub fn visual_to_buffer(
     }
     let content_count = content_line_count(buffer);
     let mut visual = 0usize;
-    for row_idx in 0..content_count {
-        let line = &buffer[row_idx];
+    for (row_idx, line) in buffer.iter().enumerate().take(content_count) {
         let n_visual = if line.cells.is_empty() {
             1
         } else {
-            (line.cells.len() + viewport_width - 1) / viewport_width
+            line.cells.len().div_ceil(viewport_width)
         };
         if visual_row < visual + n_visual {
             let chunk_index = visual_row - visual;

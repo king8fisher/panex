@@ -119,7 +119,7 @@ fn display_line_count(process: &ManagedProcess, viewport_width: usize) -> usize 
             if line.cells.is_empty() {
                 1
             } else {
-                (line.cells.len() + viewport_width - 1) / viewport_width
+                line.cells.len().div_ceil(viewport_width)
             }
         }).sum::<usize>().max(1)
     } else {
