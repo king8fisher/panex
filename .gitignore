@@ -5,3 +5,4 @@ docs/
 scripts/fire
 scripts/fire.o
 scripts/.zig-cache/
+*.pending-snap
