@@ -455,9 +455,42 @@ fn handle_focus_key(key: KeyEvent, app: &mut App, pm: &mut ProcessManager) {
     // Forward key to PTY
     if let Some(name) = selected_name {
         if let Some(bytes) = key_to_bytes(key) {
-            let _ = pm.write_to_process(&name, &bytes);
+            // Special keys produce escape sequences that get echoed as garbage
+            // in non-interactive processes. Only forward them when the process
+            // has indicated it handles keyboard input (DECCKM, alt screen, mouse).
+            if is_escape_producing_key(&key) {
+                let forward = proc_no_shift_tab // '!' suffix = explicit passthrough
+                    || pm
+                        .get_process(&name)
+                        .map(|p| p.buffer.wants_special_keys())
+                        .unwrap_or(false);
+                if forward {
+                    let _ = pm.write_to_process(&name, &bytes);
+                }
+            } else {
+                let _ = pm.write_to_process(&name, &bytes);
+            }
         }
     }
+}
+
+/// Keys that produce escape sequences (CSI/SS3) which get echoed as visible
+/// garbage (`^[[A`, `^[[B`, etc.) in non-interactive processes.
+fn is_escape_producing_key(key: &KeyEvent) -> bool {
+    matches!(
+        key.code,
+        KeyCode::Up
+            | KeyCode::Down
+            | KeyCode::Left
+            | KeyCode::Right
+            | KeyCode::Home
+            | KeyCode::End
+            | KeyCode::PageUp
+            | KeyCode::PageDown
+            | KeyCode::Insert
+            | KeyCode::Delete
+            | KeyCode::F(_)
+    )
 }
 
 fn key_to_bytes(key: KeyEvent) -> Option<Vec<u8>> {

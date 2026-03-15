@@ -50,6 +50,8 @@ struct TerminalState {
     alternate_screen: bool,
     /// Active mouse tracking mode (0 = none, 9/1000/1002/1003 = enabled).
     mouse_mode: u16,
+    /// Whether DECCKM (application cursor keys) is enabled.
+    decckm: bool,
 }
 
 impl TerminalBuffer {
@@ -109,6 +111,13 @@ impl TerminalBuffer {
         self.state.mouse_mode != 0
     }
 
+    /// Returns true if the child process has indicated it handles special keys
+    /// (arrow, function, Home/End, etc.) — i.e. DECCKM, alternate screen, or
+    /// mouse tracking is active.
+    pub fn wants_special_keys(&self) -> bool {
+        self.state.alternate_screen || self.state.decckm || self.state.mouse_mode != 0
+    }
+
     pub fn take_pending_responses(&mut self) -> Vec<Vec<u8>> {
         std::mem::take(&mut self.state.pending_responses)
     }
@@ -150,6 +159,7 @@ impl TerminalState {
             scroll_region: None,
             alternate_screen: false,
             mouse_mode: 0,
+            decckm: false,
         }
     }
 
@@ -660,6 +670,10 @@ impl Perform for TerminalState {
                                 self.alternate_screen = false;
                                 self.scroll_region = None;
                             }
+                        }
+                        1 => {
+                            // DECCKM — application cursor keys
+                            self.decckm = action == 'h';
                         }
                         9 | 1000 | 1002 | 1003 => {
                             // Mouse tracking modes

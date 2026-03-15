@@ -98,3 +98,56 @@ fn line_wrapping_at_boundary() {
     // to_test_string should show the full line content.
     insta::assert_snapshot!(output, @"abcdefgh");
 }
+
+// --- Special key tracking tests (Step 9) ---
+
+#[test]
+fn special_keys_default_off() {
+    let buf = TerminalBuffer::new(80, 24);
+    assert!(
+        !buf.wants_special_keys(),
+        "fresh buffer should not want special keys"
+    );
+}
+
+#[test]
+fn special_keys_decckm_on() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?1h"); // DECSET DECCKM — application cursor keys
+    assert!(
+        buf.wants_special_keys(),
+        "DECSET DECCKM should enable special keys"
+    );
+}
+
+#[test]
+fn special_keys_decckm_on_then_off() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?1h"); // DECSET DECCKM
+    assert!(buf.wants_special_keys());
+    buf.write(b"\x1b[?1l"); // DECRST DECCKM
+    assert!(
+        !buf.wants_special_keys(),
+        "DECRST DECCKM should disable special keys"
+    );
+}
+
+#[test]
+fn special_keys_alternate_screen() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?1049h"); // Enter alternate screen
+    assert!(
+        buf.wants_special_keys(),
+        "alternate screen should enable special keys"
+    );
+}
+
+#[test]
+fn special_keys_mouse_mode() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?1000h"); // Enable mouse tracking
+    assert!(
+        buf.wants_special_keys(),
+        "mouse mode should enable special keys"
+    );
+}
