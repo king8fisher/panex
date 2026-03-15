@@ -88,7 +88,7 @@ impl PtyHandle {
         Ok(())
     }
 
-    pub fn kill(&self, timeout_ms: u64) -> Result<()> {
+    pub fn kill(&self, _timeout_ms: u64) -> Result<()> {
         let mut child = self.child.lock().map_err(|_| anyhow!("Lock poisoned"))?;
 
         // Try to kill the process group first (kills children too)
@@ -100,7 +100,7 @@ impl PtyHandle {
             }
 
             // Poll every 10ms until timeout
-            let iterations = (timeout_ms / 10).max(1);
+            let iterations = (_timeout_ms / 10).max(1);
             for _ in 0..iterations {
                 std::thread::sleep(std::time::Duration::from_millis(10));
                 if let Ok(Some(_)) = child.try_wait() {
@@ -125,10 +125,10 @@ impl PtyHandle {
 
     /// Send SIGTERM without waiting - for progressive shutdown
     pub fn terminate(&self) -> Result<()> {
-        let child = self.child.lock().map_err(|_| anyhow!("Lock poisoned"))?;
+        let _child = self.child.lock().map_err(|_| anyhow!("Lock poisoned"))?;
 
         #[cfg(unix)]
-        if let Some(pid) = child.process_id() {
+        if let Some(pid) = _child.process_id() {
             unsafe {
                 libc::kill(-(pid as i32), libc::SIGTERM);
             }

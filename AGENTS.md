@@ -22,7 +22,10 @@ mise.toml           # Task runner (build, dev, release)
 
 ## Commands
 
-- **ci**: `cd panex-rs && cargo clippy -- -D warnings` — lint (no tests yet)
+- **ci**:
+  1. `cd panex-rs && cargo clippy -- -D warnings` — lint with zero warnings
+  2. `cd panex-rs && cargo fmt -- --check` — format check
+  3. `cd panex-rs && cargo test` — run all tests
 - **build**: `cd panex-rs && cargo build --release` — full release build
 - **build-debug**: `cd panex-rs && cargo build` — debug build
 - **test**: `cd panex-rs && cargo test` — run all tests
