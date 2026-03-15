@@ -10,7 +10,13 @@ use std::time::{Duration, Instant};
 #[derive(Debug, Clone)]
 pub enum RestartAction {
     One(String),
-    All,
+    All(usize),
+}
+
+#[derive(Debug, Clone)]
+pub enum RestartPhase {
+    Pending,
+    Active(Instant),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,8 +80,8 @@ pub struct App {
     pub pending_click: Option<(u16, u16, BufferPos, bool)>,
     /// Search state for scrollback search
     pub search: SearchState,
-    /// Restart popup state — shown for one frame, then cleared
-    pub restarting: Option<RestartAction>,
+    /// Restart popup state — Pending → Active(Instant) → None
+    pub restarting: Option<(RestartAction, RestartPhase)>,
 }
 
 impl App {

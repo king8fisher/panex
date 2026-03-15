@@ -229,14 +229,36 @@ async fn run_app(
             }
 
             // Restart popup
-            if let Some(ref action) = app.restarting {
+            if let Some((ref action, _)) = app.restarting {
                 f.render_widget(RestartPopup::new(action), size);
             }
         })?;
 
-        // Clear restart popup after one render frame
-        if app.restarting.is_some() {
-            app.restarting = None;
+        // Handle restart phases
+        if let Some((ref action, ref phase)) = app.restarting.clone() {
+            match phase {
+                ui::app::RestartPhase::Pending => {
+                    // Popup was just rendered — now execute the restart
+                    match action {
+                        ui::app::RestartAction::One(name) => {
+                            let _ = pm.restart_process(name);
+                        }
+                        ui::app::RestartAction::All(_) => {
+                            let _ = pm.restart_all();
+                        }
+                    }
+                    // Transition to Active with timestamp
+                    app.restarting = Some((
+                        action.clone(),
+                        ui::app::RestartPhase::Active(Instant::now()),
+                    ));
+                }
+                ui::app::RestartPhase::Active(start) => {
+                    if start.elapsed() >= Duration::from_millis(500) {
+                        app.restarting = None;
+                    }
+                }
+            }
         }
 
         // Handle shutdown progression

@@ -17,7 +17,7 @@ pub mod restart {
     #[derive(Debug, Clone)]
     pub enum RestartAction {
         One(String),
-        All,
+        All(usize),
     }
 
     use ratatui::{
@@ -36,7 +36,13 @@ pub mod restart {
         pub fn new(action: &RestartAction) -> Self {
             let message = match action {
                 RestartAction::One(name) => format!("Restarting {}...", name),
-                RestartAction::All => "Restarting all...".to_string(),
+                RestartAction::All(count) => {
+                    if *count == 1 {
+                        "Restarting 1 process...".to_string()
+                    } else {
+                        format!("Restarting {} processes...", count)
+                    }
+                }
             };
             Self { message }
         }

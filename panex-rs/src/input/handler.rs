@@ -3,7 +3,7 @@ use crate::input::selection::{
     extract_selected_text, visual_row_to_buffer_row, BufferPos, SelectionPhase,
 };
 use crate::process::ProcessManager;
-use crate::ui::app::RestartAction;
+use crate::ui::app::{RestartAction, RestartPhase};
 use crate::ui::output_panel::{scroll_down, scroll_to_bottom, scroll_to_top, scroll_up};
 use crate::ui::search::{find_matches, nearest_match_index};
 use crate::ui::{App, InputMode};
@@ -172,13 +172,12 @@ fn handle_browse_key(
         // Restart
         KeyCode::Char('r') => {
             if let Some(name) = selected_name {
-                app.restarting = Some(RestartAction::One(name.clone()));
-                let _ = pm.restart_process(&name);
+                app.restarting = Some((RestartAction::One(name.clone()), RestartPhase::Pending));
             }
         }
         KeyCode::Char('A') => {
-            app.restarting = Some(RestartAction::All);
-            let _ = pm.restart_all();
+            let count = pm.process_count();
+            app.restarting = Some((RestartAction::All(count), RestartPhase::Pending));
         }
 
         // Kill
