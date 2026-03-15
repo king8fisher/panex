@@ -45,6 +45,51 @@ fn alternate_screen_clears() {
     insta::assert_snapshot!(output, @"after");
 }
 
+// --- Mouse mode tracking tests (Step 8) ---
+
+#[test]
+fn mouse_mode_default_off() {
+    let buf = TerminalBuffer::new(80, 24);
+    assert!(!buf.wants_mouse(), "fresh buffer should not want mouse");
+}
+
+#[test]
+fn mouse_mode_normal_tracking() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?1000h");
+    assert!(buf.wants_mouse(), "DECSET 1000 should enable mouse");
+}
+
+#[test]
+fn mouse_mode_normal_tracking_off() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?1000h");
+    assert!(buf.wants_mouse());
+    buf.write(b"\x1b[?1000l");
+    assert!(!buf.wants_mouse(), "DECRST 1000 should disable mouse");
+}
+
+#[test]
+fn mouse_mode_any_event_tracking() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?1003h");
+    assert!(buf.wants_mouse(), "DECSET 1003 should enable mouse");
+}
+
+#[test]
+fn mouse_mode_x10_tracking() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?9h");
+    assert!(buf.wants_mouse(), "DECSET 9 should enable mouse");
+}
+
+#[test]
+fn mouse_mode_button_event_tracking() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?1002h");
+    assert!(buf.wants_mouse(), "DECSET 1002 should enable mouse");
+}
+
 #[test]
 fn line_wrapping_at_boundary() {
     // Buffer with 5 cols, write 8 chars — should wrap

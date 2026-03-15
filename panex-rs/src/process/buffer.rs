@@ -48,6 +48,8 @@ struct TerminalState {
     /// Whether we're in alternate screen buffer mode (CSI ?1049h).
     /// In alternate mode, buffer is fixed at `rows` lines and scrolls at bottom.
     alternate_screen: bool,
+    /// Active mouse tracking mode (0 = none, 9/1000/1002/1003 = enabled).
+    mouse_mode: u16,
 }
 
 impl TerminalBuffer {
@@ -103,6 +105,10 @@ impl TerminalBuffer {
         self.state.alternate_screen
     }
 
+    pub fn wants_mouse(&self) -> bool {
+        self.state.mouse_mode != 0
+    }
+
     pub fn take_pending_responses(&mut self) -> Vec<Vec<u8>> {
         std::mem::take(&mut self.state.pending_responses)
     }
@@ -143,6 +149,7 @@ impl TerminalState {
             pending_responses: Vec::new(),
             scroll_region: None,
             alternate_screen: false,
+            mouse_mode: 0,
         }
     }
 
@@ -652,6 +659,14 @@ impl Perform for TerminalState {
                             } else {
                                 self.alternate_screen = false;
                                 self.scroll_region = None;
+                            }
+                        }
+                        9 | 1000 | 1002 | 1003 => {
+                            // Mouse tracking modes
+                            if action == 'h' {
+                                self.mouse_mode = mode;
+                            } else if self.mouse_mode == mode {
+                                self.mouse_mode = 0;
                             }
                         }
                         _ => {}

@@ -111,8 +111,12 @@ pub fn handle_mouse(
 
         let selected_name = pm.process_names().get(app.selected_index).cloned();
         if let Some(name) = selected_name {
-            if let Some(bytes) = mouse_to_sgr(&event, visible_height, panel_cols) {
-                let _ = pm.write_to_process(&name, &bytes);
+            if let Some(process) = pm.get_process(&name) {
+                if process.buffer.wants_mouse() {
+                    if let Some(bytes) = mouse_to_sgr(&event, visible_height, panel_cols) {
+                        let _ = pm.write_to_process(&name, &bytes);
+                    }
+                }
             }
         }
         return;
