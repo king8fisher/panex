@@ -12,6 +12,7 @@ env:
 jobs:
   build:
     strategy:
+      fail-fast: true
       matrix:
         include:
           - os: macos-latest
@@ -124,7 +125,7 @@ jobs:
         run: |
           for pkg in artifacts/*/; do
             cd "$pkg"
-            npm publish --access public || true
+            npm publish --access public
             cd -
           done
 
