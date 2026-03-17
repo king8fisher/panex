@@ -151,3 +151,50 @@ fn special_keys_mouse_mode() {
         "mouse mode should enable special keys"
     );
 }
+
+// --- DECTCEM cursor visibility tests (Step 10) ---
+
+#[test]
+fn special_keys_cursor_hidden() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?25l"); // Hide cursor (DECTCEM disable)
+    assert!(
+        buf.wants_special_keys(),
+        "hidden cursor should enable special keys"
+    );
+}
+
+#[test]
+fn special_keys_cursor_hidden_then_shown() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?25l"); // Hide cursor
+    assert!(buf.wants_special_keys());
+    buf.write(b"\x1b[?25h"); // Show cursor (DECTCEM enable)
+    assert!(
+        !buf.wants_special_keys(),
+        "showing cursor should disable special keys"
+    );
+}
+
+#[test]
+fn special_keys_cursor_hidden_plus_alternate_screen() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?25l"); // Hide cursor
+    buf.write(b"\x1b[?1049h"); // Enter alternate screen
+    assert!(
+        buf.wants_special_keys(),
+        "both signals active should enable special keys"
+    );
+}
+
+#[test]
+fn special_keys_cursor_shown_but_decckm_on() {
+    let mut buf = TerminalBuffer::new(80, 24);
+    buf.write(b"\x1b[?25l"); // Hide cursor
+    buf.write(b"\x1b[?25h"); // Show cursor
+    buf.write(b"\x1b[?1h"); // Enable DECCKM
+    assert!(
+        buf.wants_special_keys(),
+        "DECCKM alone is sufficient even after cursor shown"
+    );
+}

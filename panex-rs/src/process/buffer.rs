@@ -52,6 +52,9 @@ struct TerminalState {
     mouse_mode: u16,
     /// Whether DECCKM (application cursor keys) is enabled.
     decckm: bool,
+    /// Whether the cursor is hidden via DECTCEM (CSI ?25l).
+    /// Interactive line-mode apps hide the cursor during redraws.
+    cursor_hidden: bool,
 }
 
 impl TerminalBuffer {
@@ -112,10 +115,13 @@ impl TerminalBuffer {
     }
 
     /// Returns true if the child process has indicated it handles special keys
-    /// (arrow, function, Home/End, etc.) — i.e. DECCKM, alternate screen, or
-    /// mouse tracking is active.
+    /// (arrow, function, Home/End, etc.) — i.e. DECCKM, alternate screen,
+    /// mouse tracking, or cursor hidden (DECTCEM) is active.
     pub fn wants_special_keys(&self) -> bool {
-        self.state.alternate_screen || self.state.decckm || self.state.mouse_mode != 0
+        self.state.alternate_screen
+            || self.state.decckm
+            || self.state.mouse_mode != 0
+            || self.state.cursor_hidden
     }
 
     pub fn take_pending_responses(&mut self) -> Vec<Vec<u8>> {
@@ -160,6 +166,7 @@ impl TerminalState {
             alternate_screen: false,
             mouse_mode: 0,
             decckm: false,
+            cursor_hidden: false,
         }
     }
 
@@ -674,6 +681,11 @@ impl Perform for TerminalState {
                         1 => {
                             // DECCKM — application cursor keys
                             self.decckm = action == 'h';
+                        }
+                        25 => {
+                            // DECTCEM — cursor visibility
+                            // 'h' = show cursor (enable), 'l' = hide cursor (disable)
+                            self.cursor_hidden = action == 'l';
                         }
                         9 | 1000 | 1002 | 1003 => {
                             // Mouse tracking modes
