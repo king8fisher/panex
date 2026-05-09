@@ -196,9 +196,22 @@ impl ProcessManager {
             .processes
             .get_mut(name)
             .ok_or_else(|| anyhow::anyhow!("Process not found: {}", name))?;
-        let marker = format!("\r\n--- Restarted {timestamp} ---\r\n");
+        let marker = Self::restart_marker(timestamp);
         process.buffer.write(marker.as_bytes());
         Ok(())
+    }
+
+    fn restart_marker(timestamp: &str) -> String {
+        const BLUE: &str = "\x1b[34m";
+        const RESET: &str = "\x1b[0m";
+
+        let text = format!("Restarted {timestamp}");
+        let padded = format!("  {text}  ");
+        let border = "─".repeat(padded.chars().count());
+
+        format!(
+            "\r\n{BLUE}┌{border}┐{RESET}\r\n{BLUE}│{RESET}{padded}{BLUE}│{RESET}\r\n{BLUE}└{border}┘{RESET}\r\n"
+        )
     }
 
     pub fn kill_process(&mut self, name: &str) -> Result<()> {
@@ -390,6 +403,7 @@ impl ProcessManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::style::Color;
     use tokio::sync::mpsc;
 
     fn process_config(name: &str) -> ProcessConfig {
@@ -412,6 +426,13 @@ mod tests {
         pm
     }
 
+    fn expected_restart_box(timestamp: &str) -> String {
+        let text = format!("Restarted {timestamp}");
+        let padded = format!("  {text}  ");
+        let border = "─".repeat(padded.chars().count());
+        format!("┌{border}┐\n│{padded}│\n└{border}┘")
+    }
+
     #[test]
     fn append_restart_marker_starts_on_separate_line_after_partial_output() {
         let mut pm = test_manager(&["one"]);
@@ -424,7 +445,31 @@ mod tests {
             .unwrap();
 
         let output = pm.get_process("one").unwrap().buffer.to_test_string();
-        assert_eq!(output, "old output\n--- Restarted 2026-05-08 12:34:56 ---");
+        assert_eq!(
+            output,
+            format!(
+                "old output\n{}",
+                expected_restart_box("2026-05-08 12:34:56")
+            )
+        );
+    }
+
+    #[test]
+    fn restart_marker_uses_blue_box_border() {
+        let mut pm = test_manager(&["one"]);
+
+        pm.append_restart_marker("one", "2026-05-08 12:34:56")
+            .unwrap();
+
+        let lines = pm.get_process("one").unwrap().buffer.get_all_lines();
+        assert!(lines[1]
+            .cells
+            .iter()
+            .all(|cell| cell.style.fg == Some(Color::Blue)));
+        assert_eq!(lines[2].cells[0].style.fg, Some(Color::Blue));
+        assert_eq!(lines[2].cells.last().unwrap().style.fg, Some(Color::Blue));
+        assert_eq!(lines[2].cells[1].style.fg, None);
+        assert_eq!(lines[3].cells[0].style.fg, Some(Color::Blue));
     }
 
     #[test]
@@ -445,7 +490,10 @@ mod tests {
         let output = pm.get_process("one").unwrap().buffer.to_test_string();
         assert_eq!(
             output,
-            "old output\n--- Restarted 2026-05-08 12:34:56 ---\nnew output"
+            format!(
+                "old output\n{}\nnew output",
+                expected_restart_box("2026-05-08 12:34:56")
+            )
         );
     }
 
@@ -464,8 +512,9 @@ mod tests {
         let one = pm.get_process("one").unwrap().buffer.to_test_string();
         let two = pm.get_process("two").unwrap().buffer.to_test_string();
 
-        assert!(one.starts_with("old output\n--- Restarted "));
-        assert!(one.ends_with(" ---"));
+        assert!(one.starts_with("old output\n┌"));
+        assert!(one.contains("\n│  Restarted "));
+        assert!(one.ends_with("┘"));
         assert_eq!(one, two);
     }
 }
