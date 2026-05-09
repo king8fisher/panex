@@ -113,6 +113,18 @@ jobs:
             "license": "MIT"
           }
           EOF
+          cat > npm-pkg/README.md << 'EOF'
+          # @king8fisher/${{ matrix.npm_package }}
+
+          Platform-specific Panex binary for ${{ matrix.target }}.
+
+          Panex is a Terminal UI for running multiple processes in parallel.
+
+          This package is installed automatically as an optional dependency of the main `panex` package. Install and use `panex` directly:
+
+          - npm: https://www.npmjs.com/package/panex
+          - GitHub: https://github.com/king8fisher/panex
+          EOF
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
