@@ -414,11 +414,9 @@ impl Perform for TerminalState {
 
     fn execute(&mut self, byte: u8) {
         match byte {
-            0x08 => {
+            0x08 if self.cursor_col > 0 => {
                 // Backspace
-                if self.cursor_col > 0 {
-                    self.cursor_col -= 1;
-                }
+                self.cursor_col -= 1;
             }
             0x09 => {
                 // Tab
@@ -669,40 +667,38 @@ impl Perform for TerminalState {
                     self.pending_responses.push(response.into_bytes());
                 }
             }
-            'h' | 'l' => {
+            'h' | 'l' if intermediates == b"?" => {
                 // DEC Private Mode Set/Reset (CSI ? ... h/l)
-                if intermediates == b"?" {
-                    let mode = get_param(0, 0);
-                    match mode {
-                        1049 | 1047 | 47 => {
-                            // Alternate screen buffer
-                            if action == 'h' {
-                                self.alternate_screen = true;
-                                self.clear_screen();
-                            } else {
-                                self.alternate_screen = false;
-                                self.scroll_region = None;
-                            }
+                let mode = get_param(0, 0);
+                match mode {
+                    1049 | 1047 | 47 => {
+                        // Alternate screen buffer
+                        if action == 'h' {
+                            self.alternate_screen = true;
+                            self.clear_screen();
+                        } else {
+                            self.alternate_screen = false;
+                            self.scroll_region = None;
                         }
-                        1 => {
-                            // DECCKM — application cursor keys
-                            self.decckm = action == 'h';
-                        }
-                        25 => {
-                            // DECTCEM — cursor visibility
-                            // 'h' = show cursor (enable), 'l' = hide cursor (disable)
-                            self.cursor_hidden = action == 'l';
-                        }
-                        9 | 1000 | 1002 | 1003 => {
-                            // Mouse tracking modes
-                            if action == 'h' {
-                                self.mouse_mode = mode;
-                            } else if self.mouse_mode == mode {
-                                self.mouse_mode = 0;
-                            }
-                        }
-                        _ => {}
                     }
+                    1 => {
+                        // DECCKM — application cursor keys
+                        self.decckm = action == 'h';
+                    }
+                    25 => {
+                        // DECTCEM — cursor visibility
+                        // 'h' = show cursor (enable), 'l' = hide cursor (disable)
+                        self.cursor_hidden = action == 'l';
+                    }
+                    9 | 1000 | 1002 | 1003 => {
+                        // Mouse tracking modes
+                        if action == 'h' {
+                            self.mouse_mode = mode;
+                        } else if self.mouse_mode == mode {
+                            self.mouse_mode = 0;
+                        }
+                    }
+                    _ => {}
                 }
             }
             _ => {}
