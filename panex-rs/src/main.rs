@@ -67,6 +67,10 @@ struct Cli {
     /// Default: fixed 20 columns. When set, the panel width scales with the terminal.
     #[arg(short = 'w', long)]
     panel_width: Option<u16>,
+
+    /// Preserve scrollback and show a restart marker instead of clearing output.
+    #[arg(long)]
+    show_restart_marker: bool,
 }
 
 #[tokio::main]
@@ -85,6 +89,7 @@ async fn main() -> Result<()> {
         cli.timeout,
         cli.buffer_size,
         cli.panel_width,
+        cli.show_restart_marker,
     );
     let auto_copy = !cli.no_auto_copy;
 
@@ -141,6 +146,7 @@ async fn run_app(
         output_rows,
         config.timeout,
         config.buffer_size,
+        config.show_restart_marker,
     );
 
     // Add processes
@@ -364,4 +370,24 @@ async fn run_app(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn cli_defaults_show_restart_marker_to_false() {
+        let cli = Cli::parse_from(["panex", "echo test"]);
+
+        assert!(!cli.show_restart_marker);
+    }
+
+    #[test]
+    fn cli_accepts_show_restart_marker_flag() {
+        let cli = Cli::parse_from(["panex", "--show-restart-marker", "echo test"]);
+
+        assert!(cli.show_restart_marker);
+    }
 }

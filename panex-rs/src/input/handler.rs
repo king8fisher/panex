@@ -557,7 +557,7 @@ mod tests {
 
     fn test_manager(names: &[&str]) -> ProcessManager {
         let (event_tx, _event_rx) = mpsc::unbounded_channel();
-        let mut pm = ProcessManager::new(event_tx, 80, 24, 500, 10_000);
+        let mut pm = ProcessManager::new(event_tx, 80, 24, 500, 10_000, false);
 
         for name in names {
             pm.add_process(ProcessConfig {

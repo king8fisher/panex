@@ -56,6 +56,9 @@ panex -t 1000 "npm run dev"  # 1 second graceful shutdown
 
 # Disable auto-copy on mouse select (require y/Enter/Ctrl-C to copy)
 panex --no-auto-copy "npm run api" "npm run web"
+
+# Preserve restart scrollback and insert a boxed restart marker
+panex --show-restart-marker "npm run api" "npm run web"
 ```
 
 ### Keyboard Shortcuts
@@ -79,6 +82,8 @@ panex --no-auto-copy "npm run api" "npm run web"
 | `V`         | Visual select (line-wise)         |
 | `y/Enter`   | Copy selection to clipboard       |
 | `q`         | Quit panex                        |
+
+Restarts clear the selected process output by default. Use `--show-restart-marker` to preserve scrollback and insert a boxed `Restarted YYYY-MM-DD HH:MM:SS` marker instead.
 
 ### Mouse
 

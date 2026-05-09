@@ -86,6 +86,14 @@ impl TerminalBuffer {
         }
     }
 
+    pub fn clear_for_restart(&mut self) {
+        let cols = self.state.cols;
+        let rows = self.state.rows;
+        let max_scrollback = self.state.max_scrollback;
+        self.state = TerminalState::new(cols, rows, max_scrollback);
+        self.parser = vte::Parser::new();
+    }
+
     pub fn write(&mut self, data: &[u8]) {
         for byte in data {
             self.parser.advance(&mut self.state, *byte);
@@ -701,5 +709,31 @@ impl Perform for TerminalState {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn clear_for_restart_removes_old_output() {
+        let mut buffer = TerminalBuffer::new(80, 24);
+        buffer.write(b"old output");
+
+        buffer.clear_for_restart();
+
+        assert_eq!(buffer.to_test_string(), "");
+    }
+
+    #[test]
+    fn clear_for_restart_then_new_output_only() {
+        let mut buffer = TerminalBuffer::new(80, 24);
+        buffer.write(b"old output");
+
+        buffer.clear_for_restart();
+        buffer.write(b"new output");
+
+        assert_eq!(buffer.to_test_string(), "new output");
     }
 }

@@ -46,6 +46,7 @@ pub struct ProcessManager {
     rows: u16,
     timeout: u64,
     buffer_size: usize,
+    show_restart_marker: bool,
 }
 
 impl ProcessManager {
@@ -55,6 +56,7 @@ impl ProcessManager {
         rows: u16,
         timeout: u64,
         buffer_size: usize,
+        show_restart_marker: bool,
     ) -> Self {
         Self {
             processes: HashMap::new(),
@@ -64,6 +66,7 @@ impl ProcessManager {
             rows,
             timeout,
             buffer_size,
+            show_restart_marker,
         }
     }
 
@@ -160,17 +163,17 @@ impl ProcessManager {
     }
 
     pub fn restart_process(&mut self, name: &str) -> Result<()> {
-        let timestamp = Self::restart_timestamp();
+        let timestamp = self.show_restart_marker.then(Self::restart_timestamp);
         self.kill_process(name)?;
         // Generation counter ensures old events are ignored, minimal delay needed
         std::thread::sleep(std::time::Duration::from_millis(50));
-        self.append_restart_marker(name, &timestamp)?;
+        self.apply_restart_output_action(name, timestamp.as_deref())?;
         self.start_process(name)
     }
 
     pub fn restart_all(&mut self) -> Result<()> {
         let names: Vec<_> = self.process_order.clone();
-        let timestamp = Self::restart_timestamp();
+        let timestamp = self.show_restart_marker.then(Self::restart_timestamp);
         // Kill all first
         for name in &names {
             let _ = self.kill_process(name);
@@ -178,7 +181,7 @@ impl ProcessManager {
         // Brief delay for cleanup
         std::thread::sleep(std::time::Duration::from_millis(50));
         for name in &names {
-            self.append_restart_marker(name, &timestamp)?;
+            self.apply_restart_output_action(name, timestamp.as_deref())?;
         }
         // Start all - generation counter ensures old events are ignored
         for name in names {
@@ -189,6 +192,29 @@ impl ProcessManager {
 
     fn restart_timestamp() -> String {
         Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
+    }
+
+    fn apply_restart_output_action(&mut self, name: &str, timestamp: Option<&str>) -> Result<()> {
+        if self.show_restart_marker {
+            self.append_restart_marker(
+                name,
+                timestamp
+                    .expect("restart marker timestamp must be set when marker mode is enabled"),
+            )
+        } else {
+            self.clear_restart_output(name)
+        }
+    }
+
+    fn clear_restart_output(&mut self, name: &str) -> Result<()> {
+        let process = self
+            .processes
+            .get_mut(name)
+            .ok_or_else(|| anyhow::anyhow!("Process not found: {}", name))?;
+        process.buffer.clear_for_restart();
+        process.scroll_offset = 0;
+        process.auto_scroll = true;
+        Ok(())
     }
 
     fn append_restart_marker(&mut self, name: &str, timestamp: &str) -> Result<()> {
@@ -416,8 +442,15 @@ mod tests {
     }
 
     fn test_manager(names: &[&str]) -> ProcessManager {
+        test_manager_with_restart_marker(names, false)
+    }
+
+    fn test_manager_with_restart_marker(
+        names: &[&str],
+        show_restart_marker: bool,
+    ) -> ProcessManager {
         let (event_tx, _event_rx) = mpsc::unbounded_channel();
-        let mut pm = ProcessManager::new(event_tx, 80, 24, 500, 10_000);
+        let mut pm = ProcessManager::new(event_tx, 80, 24, 500, 10_000, show_restart_marker);
 
         for name in names {
             pm.add_process(process_config(name));
@@ -498,8 +531,58 @@ mod tests {
     }
 
     #[test]
-    fn restart_all_appends_same_marker_to_every_process() {
+    fn restart_process_clears_old_output_by_default_without_marker() {
+        let mut pm = test_manager(&["one"]);
+        pm.get_process_mut("one")
+            .unwrap()
+            .buffer
+            .write(b"old output");
+
+        pm.restart_process("one").unwrap();
+
+        let output = pm.get_process("one").unwrap().buffer.to_test_string();
+        assert_eq!(output, "");
+        assert!(!output.contains("Restarted"));
+    }
+
+    #[test]
+    fn restart_all_clears_every_process_by_default() {
         let mut pm = test_manager(&["one", "two"]);
+        for name in ["one", "two"] {
+            pm.get_process_mut(name)
+                .unwrap()
+                .buffer
+                .write(b"old output");
+        }
+
+        pm.restart_all().unwrap();
+
+        let one = pm.get_process("one").unwrap().buffer.to_test_string();
+        let two = pm.get_process("two").unwrap().buffer.to_test_string();
+
+        assert_eq!(one, "");
+        assert_eq!(two, "");
+    }
+
+    #[test]
+    fn restart_with_marker_keeps_old_output_and_appends_marker() {
+        let mut pm = test_manager_with_restart_marker(&["one"], true);
+        pm.get_process_mut("one")
+            .unwrap()
+            .buffer
+            .write(b"old output");
+
+        pm.restart_process("one").unwrap();
+
+        let output = pm.get_process("one").unwrap().buffer.to_test_string();
+        assert!(output.starts_with("old output\n┌"));
+        assert!(output.contains("\n│  Restarted "));
+        assert!(output.ends_with("┘"));
+    }
+
+    #[test]
+    fn restart_all_appends_same_marker_to_every_process_when_enabled() {
+        let mut pm = test_manager_with_restart_marker(&["one", "two"], true);
         for name in ["one", "two"] {
             pm.get_process_mut(name)
                 .unwrap()

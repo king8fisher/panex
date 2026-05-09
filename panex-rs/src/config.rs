@@ -45,6 +45,8 @@ pub struct PanexConfig {
     pub buffer_size: usize,
     /// Panel width as percentage (10–50). None means fixed 20 columns.
     pub panel_width: Option<u16>,
+    /// Preserve scrollback and show a restart marker instead of clearing output.
+    pub show_restart_marker: bool,
 }
 
 impl PanexConfig {
@@ -55,6 +57,7 @@ impl PanexConfig {
         timeout: u64,
         buffer_size: usize,
         panel_width: Option<u16>,
+        show_restart_marker: bool,
     ) -> Self {
         let name_list: Vec<String> = names
             .map(|n| n.split(',').map(|s| s.trim().to_string()).collect())
@@ -102,6 +105,7 @@ impl PanexConfig {
             timeout,
             buffer_size,
             panel_width,
+            show_restart_marker,
         }
     }
 

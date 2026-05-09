@@ -9,7 +9,38 @@ fn config_with_panel_width(panel_width: Option<u16>) -> PanexConfig {
         500,
         10_000,
         panel_width,
+        false,
     )
+}
+
+#[test]
+fn config_stores_show_restart_marker_false() {
+    let config = PanexConfig::from_args(
+        vec!["echo test".to_string()],
+        None,
+        false,
+        500,
+        10_000,
+        None,
+        false,
+    );
+
+    assert!(!config.show_restart_marker);
+}
+
+#[test]
+fn config_stores_show_restart_marker_true() {
+    let config = PanexConfig::from_args(
+        vec!["echo test".to_string()],
+        None,
+        false,
+        500,
+        10_000,
+        None,
+        true,
+    );
+
+    assert!(config.show_restart_marker);
 }
 
 #[test]
