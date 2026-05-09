@@ -28,11 +28,11 @@
   "author": "Anton Veretennikov (king8fisher)",
   "license": "MIT",
   "optionalDependencies": {
-    "@king8fisher/panex-darwin-arm64": "0.9.6",
-    "@king8fisher/panex-darwin-x64": "0.9.6",
-    "@king8fisher/panex-linux-arm64": "0.9.6",
-    "@king8fisher/panex-linux-x64": "0.9.6",
-    "@king8fisher/panex-win32-arm64": "0.9.6",
-    "@king8fisher/panex-win32-x64": "0.9.6"
+    "@king8fisher/panex-darwin-arm64": "0.9.23",
+    "@king8fisher/panex-darwin-x64": "0.9.23",
+    "@king8fisher/panex-linux-arm64": "0.9.23",
+    "@king8fisher/panex-linux-x64": "0.9.23",
+    "@king8fisher/panex-win32-arm64": "0.9.23",
+    "@king8fisher/panex-win32-x64": "0.9.23"
   }
 }

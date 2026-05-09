@@ -95,9 +95,7 @@ impl TerminalBuffer {
     }
 
     pub fn write(&mut self, data: &[u8]) {
-        for byte in data {
-            self.parser.advance(&mut self.state, *byte);
-        }
+        self.parser.advance(&mut self.state, data);
     }
 
     /// Returns line count excluding trailing empty lines.
