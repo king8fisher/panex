@@ -1,0 +1,23 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: fmt
+      root: panex-rs/
+      run: cargo fmt -- --check
+      glob: "panex-rs/**/*.rs"
+    - name: clippy
+      root: panex-rs/
+      run: cargo clippy --all-targets -- -D warnings
+      glob: "panex-rs/**/*.rs"
+
+pre-push:
+  jobs:
+    - name: fmt
+      root: panex-rs/
+      run: cargo fmt -- --check
+    - name: clippy
+      root: panex-rs/
+      run: cargo clippy --all-targets -- -D warnings
+    - name: test
+      root: panex-rs/
+      run: cargo test
