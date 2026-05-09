@@ -49,7 +49,7 @@ impl Widget for HelpPopup {
                 Span::raw("Restart selected process"),
             ]),
             Line::from(vec![
-                Span::styled("A      ", Style::default().fg(Color::Yellow)),
+                Span::styled("R      ", Style::default().fg(Color::Yellow)),
                 Span::raw("Restart all processes"),
             ]),
             Line::from(vec![

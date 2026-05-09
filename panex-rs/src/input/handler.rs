@@ -175,7 +175,7 @@ fn handle_browse_key(
                 app.restarting = Some((RestartAction::One(name.clone()), RestartPhase::Pending));
             }
         }
-        KeyCode::Char('A') => {
+        KeyCode::Char('R') => {
             let count = pm.process_count();
             app.restarting = Some((RestartAction::All(count), RestartPhase::Pending));
         }
@@ -547,4 +547,68 @@ fn key_to_bytes(key: KeyEvent) -> Option<Vec<u8>> {
     };
 
     Some(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::ProcessConfig;
+    use tokio::sync::mpsc;
+
+    fn test_manager(names: &[&str]) -> ProcessManager {
+        let (event_tx, _event_rx) = mpsc::unbounded_channel();
+        let mut pm = ProcessManager::new(event_tx, 80, 24, 500, 10_000);
+
+        for name in names {
+            pm.add_process(ProcessConfig {
+                name: (*name).to_string(),
+                command: "true".to_string(),
+                no_shift_tab: false,
+                wrap_enabled: false,
+            });
+        }
+
+        pm
+    }
+
+    fn press(c: char) -> KeyEvent {
+        KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn uppercase_r_restarts_all_processes_in_browse_mode() {
+        let mut app = App::new(false, true);
+        let mut pm = test_manager(&["one", "two"]);
+
+        handle_browse_key(press('R'), &mut app, &mut pm, 24, 80);
+
+        match app.restarting.as_ref() {
+            Some((RestartAction::All(count), RestartPhase::Pending)) => assert_eq!(*count, 2),
+            other => panic!("expected pending restart-all action, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn uppercase_a_no_longer_restarts_all_in_browse_mode() {
+        let mut app = App::new(false, true);
+        let mut pm = test_manager(&["one", "two"]);
+
+        handle_browse_key(press('A'), &mut app, &mut pm, 24, 80);
+
+        assert!(app.restarting.is_none());
+    }
+
+    #[test]
+    fn lowercase_r_still_restarts_selected_process_in_browse_mode() {
+        let mut app = App::new(false, true);
+        let mut pm = test_manager(&["one", "two"]);
+        app.selected_index = 1;
+
+        handle_browse_key(press('r'), &mut app, &mut pm, 24, 80);
+
+        match app.restarting.as_ref() {
+            Some((RestartAction::One(name), RestartPhase::Pending)) => assert_eq!(name, "two"),
+            other => panic!("expected pending restart-one action, got {other:?}"),
+        }
+    }
 }

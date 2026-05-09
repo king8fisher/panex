@@ -87,7 +87,7 @@ impl Widget for StatusBar<'_> {
 
         let no_shift_tab = self.no_shift_tab || self.proc_no_shift_tab;
         let hints = match self.mode {
-            InputMode::Browse => "↑↓:nav  Enter/Tab:focus  r:restart  A:all  x:kill  g:pin  t/b:top/bot  /:search  v/V:select  ?:help  q:quit",
+            InputMode::Browse => "↑↓:nav  Enter/Tab:focus  r:restart  R:all  x:kill  g:pin  t/b:top/bot  /:search  v/V:select  ?:help  q:quit",
             InputMode::Focus => {
                 if no_shift_tab {
                     "Click LPanel:exit"

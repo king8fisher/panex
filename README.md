@@ -68,7 +68,7 @@ panex --no-auto-copy "npm run api" "npm run web"
 | `Shift-Tab` | Exit focus mode (unless disabled) |
 | `r`         | Restart selected process          |
 | `x`         | Kill selected process             |
-| `A`         | Restart all processes             |
+| `R`         | Restart all processes             |
 | `w`         | Toggle line wrapping              |
 | `g`         | Toggle pin (freeze/follow output) |
 | `t`         | Jump to top                       |
@@ -132,7 +132,7 @@ tmux is a vastly more powerful and mature tool. panex solves a narrower problem 
 | Capability | panex | tmux |
 | --- | --- | --- |
 | **Zero config** | `panex "cmd1" "cmd2"` — done | Need tmuxinator/scripts for multi-process startup |
-| **Process lifecycle** | `r` restart, `x` kill, `A` restart all — from the UI | Process dies? Navigate to pane, retype command |
+| **Process lifecycle** | `r` restart, `x` kill, `R` restart all — from the UI | Process dies? Navigate to pane, retype command |
 | **Process status** | Built-in list showing running/exited/crashed with exit codes | No process awareness — just shell panes |
 | **Learning curve** | `?` shows help, mouse works, usable immediately | Steep — prefix keys, no on-screen hints, needs cheat sheets |
 | **Layout** | Automatic — all processes shown immediately | Manual splits, or write a config/script |
